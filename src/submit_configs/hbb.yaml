@@ -61,11 +61,7 @@
       QCD_HT-1200to1500,
       QCD_HT-1500to2000,
     ], "files_per_job": 10, },
-    "TT": { "subsamples": [
-      TTTo2L2Nu,
-      TTTo4Q,
-      TTToLNu2Q,
-    ], "files_per_job": 10, },
+    "TT": { "files_per_job": 10, },
     "SingleTop": { "files_per_job": 20, },
     "Diboson": { "subsamples": [
       WW,
