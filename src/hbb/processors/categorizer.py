@@ -139,6 +139,9 @@ class categorizer(SkimmerABC):
         # dictionary of total # events for norm preserving variations for normalization in postprocessing
         totals_dict = {}
 
+        # nominal
+        weights_dict["weight"] = weights.weight()
+
         ###################### Normalization (Step 1) ######################
         # strip the year from the dataset name
         dataset_no_year = dataset.replace(f"{self._year}_", "")
@@ -381,7 +384,7 @@ class categorizer(SkimmerABC):
         else:
             systematics = [shift_name]
 
-        nominal_weight = ak.ones_like(candidatejet.pt) if isRealData else weights.weight()
+        nominal_weight = ak.ones_like(candidatejet.pt) if isRealData else weights_dict["weight"]
 
         output_array = None
         if self._save_skim:
@@ -409,7 +412,8 @@ class categorizer(SkimmerABC):
 
             if wmod is None:
                 if systematic in weights.variations and not isRealData:
-                    weight = weights.weight(modifier=systematic)[cut]
+                    # TODO: double check that this is ok
+                    weight = weights_dict[systematic][cut]
                 else:
                     weight = nominal_weight[cut]
             else:
