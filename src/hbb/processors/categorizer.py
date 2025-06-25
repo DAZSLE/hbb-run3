@@ -142,6 +142,10 @@ class categorizer(SkimmerABC):
         # nominal
         weights_dict["weight"] = weights.weight()
 
+        # systematics
+        for systematic in weights.variations:
+            weights_dict[systematic] = weights.weight(modifier=systematic)
+
         ###################### Normalization (Step 1) ######################
         # strip the year from the dataset name
         dataset_no_year = dataset.replace(f"{self._year}_", "")
@@ -412,7 +416,6 @@ class categorizer(SkimmerABC):
 
             if wmod is None:
                 if systematic in weights.variations and not isRealData:
-                    # TODO: double check that this is ok
                     weight = weights_dict[systematic][cut]
                 else:
                     weight = nominal_weight[cut]
