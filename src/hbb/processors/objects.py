@@ -93,6 +93,8 @@ def set_ak4jets(jets: JetArray):
     jets["jetidtight"] = jetidtight
     jets["jetidtightlepveto"] = jetidtightlepveto
 
+    # TODO: Add PNet pt regression
+
     return jets
 
 
@@ -108,10 +110,9 @@ def good_ak4jets(jets: JetArray):
 
 
 def set_ak8jets(fatjets: FatJetArray):
-    # Left as temporary alternative to get_ak8jets below
-    # Lara needs to learn about the particle transformer taggers
     fatjets["msd"] = fatjets.msoftdrop
     fatjets["qcdrho"] = 2 * np.log(fatjets.msd / fatjets.pt)
+    fatjets["pnetmass"] = fatjets.particleNet_massCorr * (1 - fatjets.rawFactor) * fatjets.mass
 
     if "globalParT_Xcs" in fatjets.fields:
         fatjets["ParTPQCD1HF"] = fatjets.globalParT_QCD1HF
