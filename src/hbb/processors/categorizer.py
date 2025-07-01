@@ -237,9 +237,9 @@ class categorizer(SkimmerABC):
         ak4_outside_ak8 = jets[dR > 0.8]
 
         # ak4 closest to ak8
-        ak4_closest_ak8 = ak4_outside_ak8[
-            ak.argmin(ak4_outside_ak8.delta_r(candidatejet), axis=1, keepdims=True)
-        ]
+        ak4_closest_ak8 = ak.firsts(
+            ak4_outside_ak8[ak.argmin(ak4_outside_ak8.delta_r(candidatejet), axis=1, keepdims=True)]
+        )
 
         btag_cut = self._b_taggers[self._year]["AK4"]["Jet_btagPNetB"]["M"]
         selection.add(
@@ -255,13 +255,13 @@ class categorizer(SkimmerABC):
         selection.add("lowmet", met.pt < 140.0)
 
         # VBF specific variables
-        jet1_away = ak4_outside_ak8[:, 0:1]
-        jet2_away = ak4_outside_ak8[:, 1:2]
-        jet3_away = ak4_outside_ak8[:, 2:3]
-        jet4_away = ak4_outside_ak8[:, 3:4]
+        jet1_away = ak.firsts(ak4_outside_ak8[:, 0:1])
+        jet2_away = ak.firsts(ak4_outside_ak8[:, 1:2])
+        jet3_away = ak.firsts(ak4_outside_ak8[:, 2:3])
+        jet4_away = ak.firsts(ak4_outside_ak8[:, 3:4])
 
-        vbf_deta = abs(ak.firsts(jet1_away).eta - ak.firsts(jet2_away).eta)
-        vbf_mjj = (ak.firsts(jet1_away) + ak.firsts(jet2_away)).mass
+        vbf_deta = abs(jet1_away.eta - jet2_away.eta)
+        vbf_mjj = (jet1_away + jet2_away).mass
         vbf_deta = ak.fill_none(vbf_deta, -1)
         vbf_mjj = ak.fill_none(vbf_mjj, -1)
 
