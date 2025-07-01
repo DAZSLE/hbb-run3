@@ -1,6 +1,7 @@
 awkward
 click
 coffea==2025.1.1
+colorama
 dask-awkward==2025.5.0
 hist
 lz4
