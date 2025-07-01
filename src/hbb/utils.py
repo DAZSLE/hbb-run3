@@ -1,7 +1,5 @@
 """
 Common functions for processors.
-
-Author(s): Raghav Kansal
 """
 
 from __future__ import annotations
@@ -13,6 +11,7 @@ from pathlib import Path
 import awkward as ak
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from coffea.analysis_tools import PackedSelection
 
 P4 = {
@@ -44,118 +43,6 @@ def add_selection(
     )
 
 
-def load_samples(
-    data_dir: Path,
-    process: str,
-    samples: list[str],
-    year: str,
-    filters: list = None,
-    columns: list = None,
-) -> dict[str, pd.DataFrame]:
-    """
-    Loads events with an optional filter.
-    Divides MC samples by the total pre-skimming, to take the acceptance into account.
-
-    Args:
-        data_dir (str): path to data directory.
-        samples (List[str]): list of sample names to load.
-        year (str): year.
-        filters (List): Optional filters when loading data.
-        columns (List): Optional columns to load.
-
-    Returns:
-        Dict[str, pd.DataFrame]: Dictionary of events dataframe for each sample.
-    """
-    data_dir = Path(data_dir) / year
-    full_samples_list = [
-        p.name for p in data_dir.iterdir() if p.is_dir()
-    ]  # get all directories in data_dir
-    events_dict = {}
-
-    for sample_name in samples:
-        # Initialize the events list for the sample
-        print("sample_name", sample_name)
-        events_list = []
-        # Check if sample directory exists in full_samples_list
-        for sample in full_samples_list:
-            if not check_selector(sample, sample_name):
-                continue
-
-            sample_path = data_dir / sample
-            parquet_path, pickles_path = sample_path / "parquet", sample_path / "pickles"
-
-            # No parquet directory?
-            if not parquet_path.exists():
-                warnings.warn(f"No parquet directory for {sample}!", stacklevel=1)
-                continue
-
-            print(f"Loading {sample}")
-            events = pd.read_parquet(parquet_path, filters=filters, columns=columns)
-
-            # No events?
-            if not len(events):
-                warnings.warn(f"No events for {sample}!", stacklevel=1)
-                continue
-
-            # Normalize by total events
-            if process != "data":
-                n_events = get_nevents(pickles_path, year, sample)
-                events["weight_nonorm"] = events["weight"]
-                events["finalWeight"] = events["weight"] / n_events
-                # print(events["finalWeight"])
-            else:
-                events["finalWeight"] = events["weight"]
-
-            events_list.append(events)
-            print(f"Loaded {sample: <50}: {len(events)} entries")
-
-        # Combine all DataFrames for the sample
-        if events_list:
-            events_dict[sample_name] = pd.concat(events_list)
-        else:
-            warnings.warn(f"No valid events loaded for sample {sample_name}.", stacklevel=1)
-
-    return events_dict
-
-
-def format_columns(columns: list):
-    """
-    Reformat input of (`column name`, `num columns`) into (`column name`, `idx`) format for
-    reading multiindex columns
-    """
-    ret_columns = []
-    for key, num_columns in columns:
-        for i in range(num_columns):
-            ret_columns.append(f"('{key}', '{i}')")
-    return ret_columns
-
-
-def get_nevents(pickles_path, year, sample_name):
-    """Adds up nevents over all pickles in ``pickles_path`` directory"""
-    try:
-        out_pickles = [p.name for p in Path(pickles_path).iterdir()]
-    except:
-        return None
-
-    file_name = out_pickles[0]
-    with Path(f"{pickles_path}/{file_name}").open("rb") as file:
-        try:
-            out_dict = pickle.load(file)
-        except EOFError:
-            print(f"Problem opening {pickles_path}/{file_name}")
-        nevents = out_dict[year][sample_name]["nevents"]  # index by year, then sample name
-
-    for file_name in out_pickles[1:]:
-        with Path(f"{pickles_path}/{file_name}").open("rb") as file:
-            try:
-                out_dict = pickle.load(file)
-            except EOFError:
-                print(f"Problem opening {pickles_path}/{file_name}")
-            nevents += out_dict[year][sample_name]["nevents"]
-
-    return nevents
-
-
 def check_selector(sample: str, selector: str | list[str]):
     if not isinstance(selector, (list, tuple)):
         selector = [selector]
@@ -172,3 +59,117 @@ def check_selector(sample: str, selector: str | list[str]):
                 return True
 
     return False
+
+
+def get_sum_genweights(data_dir: Path, dataset: str) -> float:
+    """
+    Get the sum of genweights for a given dataset.
+    :param data_dir: The directory where the datasets are stored.
+    :param dataset: The name of the dataset to get the genweights for.
+    :return: The sum of genweights for the dataset.
+    """
+    total_sumw = 0
+    try:
+        # Load the genweights from the pickle file
+        for pickle_file in list(Path(data_dir / dataset / "pickles").glob("*.pkl")):
+            with Path(pickle_file).open("rb") as file:
+                out_dict = pickle.load(file)
+            # The sum of weights is stored in the "sumw" key
+            # You can access it like this:
+            for key in out_dict:
+                sumw = next(iter(out_dict[key]["sumw"].values()))
+            total_sumw += sumw
+    except:
+        warnings.warn(
+            f"Error loading genweights for dataset: {dataset}. Skipping.",
+            category=UserWarning,
+            stacklevel=2,
+        )
+        total_sumw = 1
+
+    # print(f"Total sum of weights for all pickles for {dataset}: {total_sumw}")
+    return total_sumw
+
+
+def load_samples(
+    data_dir: Path,
+    samples: dict[str, str],
+    columns: list[str],
+    region: str,
+    extra_columns: dict[str] = None,
+    filters: list[tuple[str, str, str]] = None,
+) -> dict[str, pd.DataFrame]:
+    """
+    Load samples from a specified directory and return them as a dictionary.
+    :param data_dir: The directory where the datasets are stored.
+    :param samples: A dictionary where keys are process names and values are all the datasets corresponding to that process.
+    :param columns: A list of columns to load from the datasets.
+    :param region: The region to load the parquets from (e.g., "signal-all")
+    :param extra_columns: A dictionary where keys are dataset names and values are lists of additional columns to load for that dataset.
+    :param filters: A list of filters to apply when loading the datasets.
+    :return: A dictionary with dataset/sample names as keys and DataFrames as values.
+    """
+    events_dict = {}
+    for process, datasets in samples.items():
+        events_list = []
+        for dataset in datasets:
+            columns_to_load = columns
+            if extra_columns and dataset in extra_columns:
+                columns_to_load += extra_columns[dataset]
+
+            # Uncomment to debug
+            # print(f"Loading dataset: {dataset}")
+            # print(f"Looking in: {data_dir / dataset / 'parquet' / f'{region}*.parquet'}")
+            # print(list(Path(data_dir / dataset / "parquet").glob(f'{region}*.parquet')))
+            # print(f"Columns to load: {columns_to_load}")
+
+            try:
+                # Load the dataset into a DataFrame
+                events = pd.read_parquet(
+                    list(Path(data_dir / dataset / "parquet").glob(f"{region}*.parquet")),
+                    filters=filters,
+                    columns=columns_to_load,
+                )
+            except pa.lib.ArrowInvalid as e:
+                warnings.warn(f"ArrowInvalid error: {e}. Skipping dataset {dataset}.", stacklevel=2)
+                print("List of columns attempted to load: ", columns_to_load)
+                print(
+                    "List of files available: ",
+                    list(Path(data_dir / dataset / "parquet").glob(f"{region}*.parquet")),
+                )
+                continue
+            except:
+                print(f"Error loading dataset: {dataset}. Skipping.")
+                print(
+                    "List of files available: ",
+                    list(Path(data_dir / dataset / "parquet").glob(f"{region}*.parquet")),
+                )
+                continue
+
+            if "data" not in process:
+                # For MC datasets, we need to normalize the weights
+                sum_genweights = get_sum_genweights(data_dir, dataset)
+                print(f"Using sum_genweights for {dataset}: {sum_genweights}")
+
+                events["weight_nonorm"] = events["weight"]
+                events["finalWeight"] = events["weight"] / sum_genweights
+            else:
+                # For data, we just keep the weight as is
+                events["weight_nonorm"] = events["weight"]
+                events["finalWeight"] = events["weight"]
+
+            # Add the DataFrame to the dictionary with the dataset name as the key
+            events_list.append(events)
+            print(f"Loaded {dataset: <50}: {len(events)} entries")
+
+        # Combine all DataFrames for the process/sample
+        # print(events_list)
+
+        if events_list:
+            events_dict[process] = pd.concat(events_list)
+        else:
+            warnings.warn(
+                f"No valid events loaded for process {process}.", category=UserWarning, stacklevel=2
+            )
+
+    return events_dict
