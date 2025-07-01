@@ -1,6 +1,6 @@
 {
   "2022": {
-    "JetMET": { "files_per_job": 10, },
+    "JetMET": { "files_per_job": 8, },
     "Hbb": { "subsamples": [
       GluGluHto2B_PT-200_M-125,
       VBFHto2B_M-125_dipoleRecoilOn,
@@ -10,15 +10,15 @@
       ggZH_Hto2B_Zto2Q_M-125,
       ttHto2B_M-125,
     ], "files_per_job": 15, },
-    "QCD": { "files_per_job": 10, },
-    "TT": { "files_per_job": 10, },
+    "QCD": { "files_per_job": 5, },
+    "TT": { "files_per_job": 8, },
     "SingleTop": { "files_per_job": 20, },
     "Diboson": { "files_per_job": 20, },
-    "VJets_had_LO": { "files_per_job": 10, },
+    "VJets_had_LO": { "files_per_job": 6, },
     "EWKV": { "files_per_job": 20, },
   },
   "2022EE": {
-    "JetMET": { "files_per_job": 10, },
+    "JetMET": { "files_per_job": 6, },
     "Hbb": { "subsamples": [
       GluGluHto2B_PT-200_M-125,
       VBFHto2B_M-125_dipoleRecoilOn,
@@ -28,11 +28,11 @@
       ggZH_Hto2B_Zto2Q_M-125,
       ttHto2B_M-125,
     ], "files_per_job": 15, },
-    "QCD": { "files_per_job": 10, },
-    "TT": { "files_per_job": 10, },
+    "QCD": { "files_per_job": 4, },
+    "TT": { "files_per_job": 8, },
     "SingleTop": { "files_per_job": 20, },
     "Diboson": { "files_per_job": 20, },
-    "VJets_had_LO": { "files_per_job": 10, },
+    "VJets_had_LO": { "files_per_job": 4, },
     "EWKV": { "files_per_job": 20, },
   },
   "2023": {
@@ -41,7 +41,7 @@
       JetMET_Run2023Cv2,
       JetMET_Run2023Cv3,
       JetMET_Run2023Cv4,
-    ], "files_per_job": 10, },
+    ], "files_per_job": 8, },
     "Hbb": { "subsamples": [
       GluGluHto2B_PT-200_M-125,
       VBFHto2B_M-125_dipoleRecoilOn,
@@ -60,8 +60,8 @@
       QCD_HT-1000to1200,
       QCD_HT-1200to1500,
       QCD_HT-1500to2000,
-    ], "files_per_job": 10, },
-    "TT": { "files_per_job": 10, },
+    ], "files_per_job": 5, },
+    "TT": { "files_per_job": 8, },
     "SingleTop": { "files_per_job": 20, },
     "Diboson": { "subsamples": [
       WW,
@@ -77,11 +77,11 @@
       Zto2Q-4Jets_HT-400to600,
       Zto2Q-4Jets_HT-600to800,
       Zto2Q-4Jets_HT-800,
-    ], "files_per_job": 10, },
+    ], "files_per_job": 6, },
     "EWKV": { "files_per_job": 20, },
   },
   "2023BPix": {
-    "JetMET": { "files_per_job": 10, },
+    "JetMET": { "files_per_job": 8, },
     "Hbb": { "subsamples": [
       GluGluHto2B_PT-200_M-125,
       VBFHto2B_M-125_dipoleRecoilOn,
@@ -91,11 +91,11 @@
       ggZH_Hto2B_Zto2Q_M-125,
       ttHto2B_M-125,
     ], "files_per_job": 15, },
-    "QCD": { "files_per_job": 10, },
-    "TT": { "files_per_job": 10, },
+    "QCD": { "files_per_job": 5, },
+    "TT": { "files_per_job": 8, },
     "SingleTop": { "files_per_job": 20, },
     "Diboson": { "files_per_job": 20, },
-    "VJets_had_LO": { "files_per_job": 10, },
+    "VJets_had_LO": { "files_per_job": 6, },
     "EWKV": { "files_per_job": 20, },
   }
 }
