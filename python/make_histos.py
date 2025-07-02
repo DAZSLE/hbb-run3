@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import pickle
+import warnings
 from pathlib import Path
 
 import hist
@@ -35,21 +36,34 @@ axis_to_column = {
 }
 
 
-def fill_1d_histogram(events, axis):
+def fill_ptbinned_histogram(events, axis):
     """
-    Fills 1d histogram after event selection of any variable.
+    Fills histogram after event selection of any variable.
+    The histogram has a pt-binned axis for FatJet0.
+
     :param events: Dictionary of events loaded from parquet files.
     :param axis: String to fill the histogram for. Needs to be one of the keys in axis_to_histaxis.
     :return: histogram filled with the selected events.
     """
 
-    h = hist.Hist(axis_to_histaxis[axis], axis_to_histaxis["category"])
+    if axis == "pt1":
+        # Ensure the axis is valid
+        warnings.warn(
+            f"Cannot use pt1 axis for histogram filling since that is used already. Axis: {axis}",
+            stacklevel=2,
+            category=UserWarning,
+        )
+        exit(1)
+
+    h = hist.Hist(axis_to_histaxis[axis], axis_to_histaxis["pt1"], axis_to_histaxis["category"])
 
     for _process_name, data in events.items():
-        weight_val = data["finalWeight"]
+        weight_val = data["finalWeight"].astype(float)
         var = data[axis_to_column[axis]]
 
-        # Event selection
+        ### Event selection
+
+        # Leading FatJet
         Txbb = data["FatJet0_pnetTXbb"]
         msd = data["FatJet0_msd"]
         pt = data["FatJet0_pt"]
@@ -67,6 +81,7 @@ def fill_1d_histogram(events, axis):
         for category, selection in selection_dict.items():
             h.fill(
                 var[selection],
+                pt[selection],
                 category=category,
                 weight=weight_val[selection],
             )
@@ -128,8 +143,7 @@ def main(args):
         )
 
         # Fill histograms with the loaded events dictionary
-        h = fill_1d_histogram(events, "pt1")
-
+        h = fill_ptbinned_histogram(events, "msd1")
         if process not in histograms:
             histograms[process] = h
         else:
