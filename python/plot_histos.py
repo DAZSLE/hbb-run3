@@ -15,7 +15,7 @@ from hbb.common_vars import LUMI
 hep.style.use("CMS")
 
 
-def plot_ptbin_stack(hists, category, year, outdir, save_individual=False):
+def plot_ptbin_stack(hists, category, year, outdir, save_individual):
     pt_axis_name = "pt1"
 
     # Load style configuration
@@ -86,7 +86,7 @@ def plot_ptbin_stack(hists, category, year, outdir, save_individual=False):
         luminosity = (
             LUMI[year] / 1000.0
             if "-" not in year
-            else sum(LUMI[y] / 1000.0 for y in year.split("_"))
+            else sum(LUMI[y] / 1000.0 for y in year.split("-"))
         )
         hep.cms.label(
             "Private Work",
@@ -98,11 +98,11 @@ def plot_ptbin_stack(hists, category, year, outdir, save_individual=False):
             year=year,
         )
         fig.savefig(
-            f"{outdir}/{category}_ptbin{pt_low}_{pt_high}.png", dpi=300, bbox_inches="tight"
+            f"{outdir}/{year}_{category}_ptbin{pt_low}_{pt_high}.png", dpi=300, bbox_inches="tight"
         )
 
         if save_individual:
-            # Save individual histograms
+            # Save individual histograms for debugging
             for process, histo in histograms_to_plot.items():
                 fig_indiv, ax_indiv = plt.subplots(figsize=(8, 6))
                 hep.histplot(histo, ax=ax_indiv, histtype="step", color="black")
@@ -110,7 +110,7 @@ def plot_ptbin_stack(hists, category, year, outdir, save_individual=False):
                 ax_indiv.set_ylabel("Events")
                 ax_indiv.grid(True)
                 plt.savefig(
-                    f"hist_{process}_{category}_pt{pt_low}_{pt_high}.jpg",
+                    f"hist_{process}_{category}_pt{pt_low}_{pt_high}.png",
                     dpi=300,
                     bbox_inches="tight",
                 )
@@ -144,7 +144,8 @@ def main(args):
                     histograms[process] = h
 
     print("Processes in histograms:", histograms.keys())
-    year = args.year[0] if len(args.year) == 1 else "_".join(f"{y}" for y in args.year)
+    # Join the years into a single string if multiple years are provided
+    year = args.year[0] if len(args.year) == 1 else "-".join(f"{y}" for y in args.year)
 
     output_dir = Path(args.outdir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -153,7 +154,7 @@ def main(args):
     print(
         f"Plotting histograms for category: {category}, year: {year}, output directory: {args.outdir} \n"
     )
-    plot_ptbin_stack(histograms, category, year, args.outdir)
+    plot_ptbin_stack(histograms, category, year, args.outdir, save_individual=args.save_individual)
 
 
 if __name__ == "__main__":
@@ -178,6 +179,12 @@ if __name__ == "__main__":
         help="Output directory for saving histograms",
         type=str,
         required=True,
+    )
+    parser.add_argument(
+        "--save_individual",
+        help="Save individual histograms for each process",
+        action="store_true",
+        default=False,
     )
     args = parser.parse_args()
     main(args)
