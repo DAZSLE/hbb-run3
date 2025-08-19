@@ -18,7 +18,8 @@ done
 (
     r=3
     # shallow clone of single branch (keep repo size as small as possible)
-    while ! git clone --single-branch --branch $branch --depth=1 https://github.com/DAZSLE/hbb-run3.git
+    #while ! git clone --single-branch --branch $branch --depth=1 https://github.com/DAZSLE/hbb-run3.git
+    while ! git clone --single-branch --branch $branch --depth=1 https://github.com/gabihamilton/hbb-run3.git
     do
         ((--r)) || exit
         sleep 60
@@ -27,7 +28,8 @@ done
 cd hbb-run3 || exit
 
 commithash=$$(git rev-parse HEAD)
-echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
+#echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
+echo "https://github.com/gabihamilton/hbb-run3/commit/$${commithash}" > commithash.txt
 
 #move output to t2s
 for t2_prefix in ${t2_prefixes}
