@@ -20,8 +20,8 @@ cd hbb-run3 || exit
 # Save the githash directly to the final destination
 commithash=$$(git rev-parse HEAD)
 echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
-xrdfs ${t2_prefixes[0]} mkdir -p "/${outdir}/githashes"
-xrdcp -f commithash.txt ${t2_prefixes[0]}/${outdir}/githashes/commithash_${jobnum}.txt
+xrdfs $${t2_prefixes[0]} mkdir -p "/${outdir}/githashes"
+xrdcp -f commithash.txt $${t2_prefixes[0]}/${outdir}/githashes/commithash_${jobnum}.txt
 
 
 pip install -e .
@@ -32,7 +32,7 @@ python -u -W ignore $script --year $year --starti $starti --endi $endi --samples
 
 # Move final output to EOS
 # 1. Copy the pickle file (histograms)
-xrdfs ${t2_prefixes[0]} mkdir -p "/${outdir}/pickles"
+xrdfs $${t2_prefixes[0]} mkdir -p "/${outdir}/pickles"
 xrdcp -f *.pkl "${t2_prefixes[0]}/${outdir}/pickles/out_${jobnum}.pkl"
 
 # 2. Recursively copy the entire parquet directory structure
