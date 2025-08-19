@@ -213,7 +213,9 @@ class categorizer(SkimmerABC):
         selection.add("2FJ", ak.num(goodfatjets, axis=1) == 2)
         selection.add("not2FJ", ak.num(goodfatjets, axis=1) != 2)
 
-        xbbfatjets = goodfatjets[ak.argsort(goodfatjets.particleNet_XbbVsQCD, axis=1, ascending=False)]
+        xbbfatjets = goodfatjets[
+            ak.argsort(goodfatjets.particleNet_XbbVsQCD, axis=1, ascending=False)
+        ]
 
         candidatejet = ak.firsts(xbbfatjets[:, 0:1])
         subleadingjet = ak.firsts(xbbfatjets[:, 1:2])
@@ -507,9 +509,9 @@ class categorizer(SkimmerABC):
             # print(output_array[cut].compute())
 
             if "root:" in self._skim_outpath:
-                skim_path = f"{self._skim_outpath}/{self._year}/{dataset}/{region}"
+                skim_path = f"{self._skim_outpath}/{self._year}/{dataset}/parquet"
             else:
-                skim_path = Path(self._skim_outpath) / self._year / dataset / region
+                skim_path = Path(self._skim_outpath) / self._year / dataset / "parquet"
                 skim_path.mkdir(parents=True, exist_ok=True)
             print("Saving skim to: ", skim_path)
 
@@ -517,6 +519,7 @@ class categorizer(SkimmerABC):
             output["skim"][region] = dak.to_parquet(
                 output_array[cut],
                 str(skim_path),
+                name_function=lambda i: f"{region}_{i}.parquet",
                 compute=False,
             )
 

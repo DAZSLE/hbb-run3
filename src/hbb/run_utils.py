@@ -152,7 +152,7 @@ def get_fileset(
 
             for subsample, fnames in sample_set.items():
                 run_fnames = fnames[starti:] if endi < 0 else fnames[starti:endi]
-                sample_fileset[f"{year}_{subsample}"] = run_fnames
+                sample_fileset[subsample] = run_fnames
 
             fileset = {**fileset, **sample_fileset}
 

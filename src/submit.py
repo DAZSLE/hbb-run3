@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import pickle
 import time
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +9,7 @@ from pathlib import Path
 import dask
 import uproot
 import yaml
-from coffea import  util
+from coffea import util
 from coffea.dataset_tools import apply_to_fileset, max_chunks, preprocess
 from coffea.nanoevents import NanoAODSchema
 from dask.distributed import performance_report
@@ -107,7 +106,7 @@ if __name__ == "__main__":
         transfer_input_files=["src"],
         ship_env=True,
         memory="10GB",
-        image="coffeateam/coffea-dask-almalinux9:latest",
+        image="coffeateam/coffea-dask-almalinux9:2025.2.0",
         log_directory=f"/uscmst1b_scratch/lpc1/3DayLifetime/{os.environ['USER']}",
     )
     cluster.adapt(minimum=1, maximum=250)
