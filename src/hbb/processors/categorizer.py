@@ -519,8 +519,8 @@ class categorizer(SkimmerABC):
                     Path(self._skim_outpath)
                     / self._year
                     / dataset_name_with_year
-                    / "parquet"
                     / region
+                    / "parquet"
                 )
                 skim_path.mkdir(parents=True, exist_ok=True)
             print("Saving skim to: ", skim_path)
