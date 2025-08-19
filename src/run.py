@@ -109,35 +109,6 @@ def run(year: str, fileset: dict, args: argparse.Namespace):
         pickle.dump(output, f)
     print("Saved output to ", f"{local_dir}/{args.starti}-{args.endi}.pkl")
 
-    # need to combine all the files from these processor
-    # otherwise it will complain about too many small files
-    if args.save_skim:
-        import pandas as pd
-        import pyarrow as pa
-        import pyarrow.parquet as pq
-
-        # only find subfolders with parquet files
-        parquet_folders = set()
-        for parquet_file in local_parquet_dir.rglob("*.parquet"):
-            parquet_folders.add(str(parquet_file.parent.resolve()))
-        # print("Subfolders: ", parquet_folders)
-
-        for folder in parquet_folders:
-            full_path = Path(folder)
-            region_name = full_path.name
-            pddf = pd.read_parquet(folder)
-
-            # need to write with pyarrow as pd.to_parquet doesn't support different types in
-            # multi-index column names
-            table = pa.Table.from_pandas(pddf)
-            output_file = f"{local_dir}/{region_name}_{args.starti}-{args.endi}.parquet"
-            pq.write_table(table, output_file)
-            print("Saved parquet file to ", output_file)
-
-        # remove subfolder
-        print("Removing temporary folder: ", local_parquet_dir)
-        shutil.rmtree(local_parquet_dir)
-
 
 def main(args):
 
