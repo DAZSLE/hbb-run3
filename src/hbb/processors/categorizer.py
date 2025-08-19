@@ -519,7 +519,7 @@ class categorizer(SkimmerABC):
             output["skim"][region] = dak.to_parquet(
                 output_array[cut],
                 str(skim_path),
-                name_function=lambda i: f"{region}_{i}.parquet",
+                name_function=lambda x: f"{region}_{x}.parquet",  # trying to save parquet files with region name
                 compute=False,
             )
 

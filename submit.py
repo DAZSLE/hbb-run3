@@ -71,8 +71,8 @@ if __name__ == "__main__":
     yaml_path = local_dir / args.yaml
 
     skim_dir = f"/store/group/lpchbbrun3/{os.environ['USER']}/{output_tag}/"
-    skim_outpath_local = f"outfiles/{output_tag}/"
     skim_outpath = f"root://cmseos.fnal.gov/{skim_dir}"
+    outpath_local = f"outfiles/{output_tag}/"
 
     print("Running on year: ", year)
     print("Using yaml file: ", yaml_path)
@@ -106,7 +106,7 @@ if __name__ == "__main__":
         transfer_input_files=["src"],
         ship_env=True,
         memory="10GB",
-        image="coffeateam/coffea-dask-almalinux9:2025.2.0",
+        image="coffeateam/coffea-dask-almalinux9:latest",
         log_directory=f"/uscmst1b_scratch/lpc1/3DayLifetime/{os.environ['USER']}",
     )
     cluster.adapt(minimum=1, maximum=250)
@@ -123,8 +123,8 @@ if __name__ == "__main__":
                 sub_fileset = {subsample: fileset[subsample]}
                 dict_process_files = get_dataset_spec(sub_fileset)
 
-                Path(skim_outpath_local).mkdir(parents=True, exist_ok=True)
-                outfile = skim_outpath_local + subsample + "_dask.coffea"
+                Path(outpath_local).mkdir(parents=True, exist_ok=True)
+                outfile = outpath_local + subsample + "_dask.coffea"
                 print("Will save to: ", outfile)
 
                 if Path(outfile).is_file():
