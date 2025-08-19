@@ -37,8 +37,8 @@ xrdcp -f *.pkl "${t2_prefixes[0]}/${outdir}/pickles/out_${jobnum}.pkl"
 
 # 2. Recursively copy the entire parquet directory structure
 LOCAL_PARQUET_DIR="outparquet/${year}/${year}_${subsample}/parquet"
-if [ -d "$LOCAL_PARQUET_DIR" ]; then
-    xrdcp -r -f $LOCAL_PARQUET_DIR ${t2_prefixes[0]}/${outdir}/
+if [ -d "$$LOCAL_PARQUET_DIR" ]; then
+    xrdcp -r -f $$LOCAL_PARQUET_DIR ${t2_prefixes[0]}/${outdir}/
 fi
 
 
