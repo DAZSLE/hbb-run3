@@ -509,9 +509,9 @@ class categorizer(SkimmerABC):
             # print(output_array[cut].compute())
 
             if "root:" in self._skim_outpath:
-                skim_path = f"{self._skim_outpath}/{self._year}/{dataset}/parquet"
+                skim_path = f"{self._skim_outpath}/{self._year}/{dataset}/{region}"
             else:
-                skim_path = Path(self._skim_outpath) / self._year / dataset / "parquet"
+                skim_path = Path(self._skim_outpath) / self._year / dataset / region
                 skim_path.mkdir(parents=True, exist_ok=True)
             print("Saving skim to: ", skim_path)
 
@@ -519,7 +519,6 @@ class categorizer(SkimmerABC):
             output["skim"][region] = dak.to_parquet(
                 output_array[cut],
                 str(skim_path),
-                name_function=lambda x: f"{region}_{x}.parquet",  # trying to save parquet files with region name
                 compute=False,
             )
 
