@@ -18,7 +18,7 @@ rm *.parquet
 cd hbb-run3 || exit
 
 # Save the githash directly to the final destination
-commithash=$(git rev-parse HEAD)
+commithash=$$(git rev-parse HEAD)
 echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
 xrdfs ${t2_prefixes[0]} mkdir -p "/${outdir}/githashes"
 xrdcp -f commithash.txt ${t2_prefixes[0]}/${outdir}/githashes/commithash_${jobnum}.txt
