@@ -18,10 +18,11 @@ rm *.parquet
 cd hbb-run3 || exit
 
 # Save the githash directly to the final destination
+# NOTE: The $(...) is escaped as $$() for the python template
 commithash=$$(git rev-parse HEAD)
 echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
-xrdfs $${t2_prefixes[0]} mkdir -p "/${outdir}/githashes"
-xrdcp -f commithash.txt $${t2_prefixes[0]}/${outdir}/githashes/commithash_${jobnum}.txt
+xrdfs ${t2_prefixes} mkdir -p "/${outdir}/githashes"
+xrdcp -f commithash.txt ${t2_prefixes}/${outdir}/githashes/commithash_${jobnum}.txt
 
 
 pip install -e .
@@ -31,14 +32,17 @@ python -u -W ignore $script --year $year --starti $starti --endi $endi --samples
 
 
 # Move final output to EOS
-# 1. Copy the pickle file (histograms)
-xrdfs $${t2_prefixes[0]} mkdir -p "/${outdir}/pickles"
-xrdcp -f *.pkl "${t2_prefixes[0]}/${outdir}/pickles/out_${jobnum}.pkl"
+# 1. Safely copy the pickle file (histograms)
+LOCAL_PKL_FILE="${starti}-${endi}.pkl"
+if [ -f "$$LOCAL_PKL_FILE" ]; then
+    xrdfs ${t2_prefixes} mkdir -p "/${outdir}/pickles"
+    xrdcp -f $$LOCAL_PKL_FILE "${t2_prefixes}/${outdir}/pickles/out_${jobnum}.pkl"
+fi
 
 # 2. Recursively copy the entire parquet directory structure
 LOCAL_PARQUET_DIR="outparquet/${year}/${year}_${subsample}/parquet"
 if [ -d "$$LOCAL_PARQUET_DIR" ]; then
-    xrdcp -r -f $$LOCAL_PARQUET_DIR ${t2_prefixes[0]}/${outdir}/
+    xrdcp -r -f $$LOCAL_PARQUET_DIR ${t2_prefixes}/${outdir}/
 fi
 
 
