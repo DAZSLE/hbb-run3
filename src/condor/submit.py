@@ -85,7 +85,8 @@ def main(args):
             if args.submit:
                 print("Submitting " + subsample)
 
-            sample_dir = outdir / args.year / subsample
+            dataset_name_with_year = f"{args.year}_{subsample}"
+            sample_dir = outdir / args.year / dataset_name_with_year
             njobs = ceil(tot_files / args.files_per_job)
 
             for j in range(njobs):
@@ -161,6 +162,6 @@ def parse_args(parser):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parse_args(parser)
-    args = parser.parse_args()
     run_utils.parse_common_args(parser)
+    args = parser.parse_args()
     main(args)
