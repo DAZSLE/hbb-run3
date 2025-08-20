@@ -1,18 +1,13 @@
 # hbb-run3
 
 ## Setup environment
+Two important things to make sure every time you are working in your analysis:
+- Ensure you have a valid grid certificate:
+     You can check that with `voms-proxy-info -all` and start one with `voms-proxy-init --rfc --voms cms -valid 192:00`.
+- It is good practice to always run your analysis within a dedicated virtual environment to isolate project-specific dependencies and ensure reproducibility. Instructions on how to start the environment for this analysis below.
 
-**Singularity**: (for submitting jobs)
-Set up environment by following instructions at https://github.com/CoffeaTeam/lpcjobqueue/
 
-Ensure you have a valid grid certificate.
-
-Enable singularity
-```bash
-./shell coffeateam/coffea-dask-almalinux9:latest
-```
-
-**Virtual environment**: (for testing locally)
+**Virtual environment**: 
 
 The instructions below will do the following:
 
@@ -85,22 +80,33 @@ source ~/.bashrc
 
 ## Run processor locally
 
+Remember to source micromamba (i.e. `source ~/.bashrc`)
+
 **In your micromamba environment:**
 ```
 micromamba activate hbb
 ```
 
+To run on a single file (starting index at 0, ending index at 1) for one subsample
 ```bash
-# to run on a single file (starting index at 0, ending index at 1) for one subsample
 python src/run.py --sample Hbb --subsample GluGluHto2B_PT-200_M-125 --starti 0 --endi 1
-# to save skim, add:
---save-skim
+```
+To save skim, add `--save-skim`
 
-# to run on multiple subsamples
+To run on multiple subsamples:
+```
 python src/run.py --sample Hbb --subsample GluGluHto2B_PT-200_M-125  VBFHto2B_M-125 --starti 0 --endi 1
 ```
 
 ## Submit jobs with DASK
+
+**Singularity**: (for submitting jobs)
+Set up environment by following instructions at https://github.com/CoffeaTeam/lpcjobqueue/
+
+Enable singularity
+```bash
+./shell coffeateam/coffea-dask-almalinux9:latest
+```
 
 **In the bash shell:**
 
@@ -114,12 +120,13 @@ python3 submit.py --year 2022 --tag test --yaml src/submit_configs/hbb_example.y
 ```
 
 
-Format your tags as `TAG=YRMonthDay` e.g. `TAG=25May22`.
-
-To enable the skimming option, add:
+Format your tags as `TAG=YRMonthDay` e.g. `TAG=25May22`. You can do that with:
 ```bash
---save-skim
+export TAG=25May22
+export YEAR=2022
 ```
+
+To enable the skimming option, add `--save-skim`
 
 The processor will output parquet files for each of the regions defined in categorizer.py, for example:
 
@@ -149,25 +156,17 @@ To submit a specific subsample:
 python src/condor/submit.py --tag $TAG  --samples Hbb --subsamples GluGluHto2B_PT-200_M-125 --git-branch main  --allow-diff-local-repo
 ```
 - Format your tags as `TAG=YRMonthDay` e.g. `TAG=25May22`.
-- You must specify the git branch name
-- If you have local changest that have not been committed to github, it will complain. Add `--allow-diff-local-repo` to avoid that`.
+- You **must** specify the git branch name
+- If you have local changest that have not been committed to github, it will complain. Add `--allow-diff-local-repo` to avoid that.
 
 This will create a set of condor submission files. To submit add: `--submit`.
 
-To submit a set of samples (this will submit all years in that yaml file:
+To submit a set of samples:
 ```bash
-nohup python src/condor/submit_from_yaml.py --tag $TAG --yaml src/submit_configs/${YAML}.yaml --year $YEAR &> tmp/submitout.txt &
+nohup python src/condor/submit_from_yaml.py --tag $TAG --yaml src/submit_configs/${YAML}.yaml --year $YEAR --git-branch main --nano-version v12 --submit &> tmp/submitout.txt &
 ```
 
 By default the yaml is: `src/submit_configs/hbb.yaml`.
-
-For example:
-```
-# The git branch should be specified
-# For best practices, the script will automatically check if your code version is up to date in github. If you have changes that are not committed/pushed use --allow-diff-local-repo
-
-python src/condor/submit_from_yaml.py --yaml src/submit_configs/hbb.yaml --tag 25May23 --git-branch main --allow-diff-local-repo --year 2022EE
-```
 
 To check whether jobs have finished use `src/condor/check_jobs.py`.
 
