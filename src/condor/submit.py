@@ -85,8 +85,7 @@ def main(args):
             if args.submit:
                 print("Submitting " + subsample)
 
-            dataset_name_with_year = f"{args.year}_{subsample}"
-            sample_dir = outdir / args.year / dataset_name_with_year
+            sample_dir = outdir / args.year / subsample
             njobs = ceil(tot_files / args.files_per_job)
 
             for j in range(njobs):

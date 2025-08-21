@@ -508,14 +508,10 @@ class categorizer(SkimmerABC):
             # print(output_array.compute())
             # print(output_array[cut].compute())
 
-            dataset_name_with_year = f"{self._year}_{dataset}"
-
             if "root:" in self._skim_outpath:
-                skim_path = (
-                    f"{self._skim_outpath}/{self._year}/{dataset_name_with_year}/parquet/{region}"
-                )
+                skim_path = f"{self._skim_outpath}/{self._year}/{dataset}/parquet/{region}"
             else:
-                skim_path = Path(self._skim_outpath) / self._year / dataset_name_with_year / region
+                skim_path = Path(self._skim_outpath) / self._year / dataset / "parquet" / region
                 skim_path.mkdir(parents=True, exist_ok=True)
             print("Saving skim to: ", skim_path)
 

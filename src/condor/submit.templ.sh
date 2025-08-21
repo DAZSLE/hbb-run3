@@ -44,21 +44,23 @@ python -u -W ignore $script --year $year --starti $starti --endi $endi --samples
 
 # Move final output to EOS
 # This new logic recursively copies the region directories created by the processor
+# --- FINAL COPY LOGIC ---
 
-# First, copy the pickle file
-xrdfs ${t2_prefixes} mkdir -p "/${outdir}/pickles"
-xrdcp -f *.pkl "${t2_prefixes}/${outdir}/pickles/out_${jobnum}.pkl"
-
-# Next, copy the entire directory structure for the skimmed files
-LOCAL_SKIM_DIR="outparquet/${year}/${year}_${subsample}"
-if [ -d "$$LOCAL_SKIM_DIR" ]; then
-    # Copy each region directory (e.g., control-tt, signal-all) and its contents
-    for region_dir in $$LOCAL_SKIM_DIR/*; do
-        if [ -d "$$region_dir" ]; then
-            xrdcp -r -f $$region_dir ${t2_prefixes}/${outdir}/
-        fi
-    done
+# 1. Copy the pickle file (histograms)
+# NOTE: Uses a safe check to ensure the file exists
+LOCAL_PKL_FILE="${starti}-${endi}.pkl"
+if [ -f "$$LOCAL_PKL_FILE" ]; then
+    xrdfs ${t2_prefixes} mkdir -p "/${outdir}/pickles"
+    xrdcp -f $$LOCAL_PKL_FILE "${t2_prefixes}/${outdir}/pickles/out_${jobnum}.pkl"
 fi
+
+# 2. Recursively copy the entire parquet directory structure
+LOCAL_PARQUET_DIR="outparquet/${year}/${subsample}/parquet"
+if [ -d "$$LOCAL_PARQUET_DIR" ]; then
+    xrdcp -r -f $$LOCAL_PARQUET_DIR ${t2_prefixes}/${outdir}/
+fi
+
+
 
 rm *.parquet
 rm *.pkl
