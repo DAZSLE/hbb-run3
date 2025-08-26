@@ -7,7 +7,7 @@ Two important things to make sure every time you are working in your analysis:
 - It is good practice to always run your analysis within a dedicated virtual environment to isolate project-specific dependencies and ensure reproducibility. Instructions on how to start the environment for this analysis below.
 
 
-**Virtual environment**: 
+**Virtual environment**:
 
 The instructions below will do the following:
 
@@ -78,12 +78,23 @@ echo 'export PRE_COMMIT_HOME=~./nobackup/pre-commit/.pre-commit-cache' >> ~/.bas
 source ~/.bashrc
 ```
 
-## Run processor locally
+**Singularity**: (for submitting jobs with Dask)
+Set up environment by following instructions at https://github.com/CoffeaTeam/lpcjobqueue/
 
-Remember to source micromamba (i.e. `source ~/.bashrc`)
+Ensure you have a valid grid certificate (`voms-proxy-init -voms cms -valid 192:00`)
+
+Enable singularity
+```bash
+./shell coffeateam/coffea-dask-almalinux9:latest
+```
+
+
+
+## Run processor locally
 
 **In your micromamba environment:**
 ```
+source ~/.bashrc
 micromamba activate hbb
 ```
 
@@ -112,11 +123,11 @@ Enable singularity
 
 Run the processor for a certain year:
 ```bash
-python3 submit.py --year $YEAR --tag $TAG --yaml src/submit_configs/hbb_example.yaml
+python3 src/submit.py --year $YEAR --tag $TAG --yaml src/submit_configs/hbb_example.yaml
 ```
 e.g.:
 ```
-python3 submit.py --year 2022 --tag test --yaml src/submit_configs/hbb_example.yaml
+python3 src/submit.py --year 2022 --tag test --yaml src/submit_configs/hbb_example.yaml
 ```
 
 
@@ -149,11 +160,12 @@ proxy has expired
 if your proxy is not valid in the dask submission.
 Note: Start your proxy outside your `./shell` singularity environment.
 
+
 ## Submit jobs with CONDOR
 
 To submit a specific subsample:
 ```bash
-python src/condor/submit.py --tag $TAG  --samples Hbb --subsamples GluGluHto2B_PT-200_M-125 --git-branch main  --allow-diff-local-repo
+python src/condor/submit.py --tag $TAG  --samples Hbb --subsamples GluGluHto2B_PT-200_M-125 --git-branch main  --allow-diff-local-repo --submit
 ```
 - Format your tags as `TAG=YRMonthDay` e.g. `TAG=25May22`.
 - You **must** specify the git branch name
@@ -168,9 +180,29 @@ nohup python src/condor/submit_from_yaml.py --tag $TAG --yaml src/submit_configs
 
 By default the yaml is: `src/submit_configs/hbb.yaml`.
 
+For example:
+```
+# For best practices, the script will automatically check if your code version is up to date in github. If you have changes that are not committed/pushed use --allow-diff-local-repo
+
+python src/condor/submit_from_yaml.py --yaml src/submit_configs/hbb.yaml --tag 25May23 --git-branch main --allow-diff-local-repo --year 2022EE
+```
+
 To check whether jobs have finished use `src/condor/check_jobs.py`.
 
 Example:
 ```
 python src/condor/check_jobs.py  --location /eos/uscms/store/user/lpchbbrun3/cmantill/ --tag 25Jun25_v12 --year 2023
+```
+
+To check whether jobs have finished use `src/condor/check_jobs.py`.
+
+Example:
+```
+python src/condor/check_jobs.py  --location /eos/uscms/store/user/lpchbbrun3/cmantill/ --tag 25Jun25_v12 --year 2023
+```
+## Plotting features from parquet files
+
+Example:
+```
+python make_histos.py  --region signal-all --year 2022
 ```
