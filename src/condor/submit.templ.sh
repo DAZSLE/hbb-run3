@@ -31,12 +31,6 @@ commithash=$$(git rev-parse HEAD)
 #echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
 echo "https://github.com/gabihamilton/hbb-run3/commit/$${commithash}" > commithash.txt
 
-#move output to t2s
-for t2_prefix in ${t2_prefixes}
-do
-    xrdcp -f commithash.txt $${t2_prefix}/${outdir}/githashes/commithash_${jobnum}.txt
-done
-
 pip install -e .
 
 # run code (saving skim always)
@@ -44,21 +38,38 @@ python -u -W ignore $script --year $year --starti $starti --endi $endi --samples
 
 # Move final output to EOS
 # This new logic recursively copies the region directories created by the processor
-# --- FINAL COPY LOGIC ---
 
-# 1. Copy the pickle file (histograms)
-# NOTE: Uses a safe check to ensure the file exists
-LOCAL_PKL_FILE="${starti}-${endi}.pkl"
-if [ -f "$$LOCAL_PKL_FILE" ]; then
-    xrdfs ${t2_prefixes} mkdir -p "/${outdir}/pickles"
-    xrdcp -f $$LOCAL_PKL_FILE "${t2_prefixes}/${outdir}/pickles/out_${jobnum}.pkl"
-fi
 
 # 2. Recursively copy the entire parquet directory structure
-LOCAL_PARQUET_DIR="outparquet/${year}/${subsample}/parquet"
-if [ -d "$$LOCAL_PARQUET_DIR" ]; then
-    xrdcp -r -f $$LOCAL_PARQUET_DIR ${t2_prefixes}/${outdir}/
-fi
+#LOCAL_PARQUET_DIR="outparquet/${year}/${subsample}/parquet"
+#if [ -d "$$LOCAL_PARQUET_DIR" ]; then
+#    xrdcp -r -f $$LOCAL_PARQUET_DIR ${t2_prefixes}/${outdir}/
+#fi
+
+# --- FINAL COPY LOGIC ---
+# This logic creates the nested structure and partN.parquet names
+
+# 1. First, handle the githash and pickle files
+xrdfs ${t2_prefixes} mkdir -p "/${outdir}/githashes"
+xrdcp -f commithash.txt "${t2_prefixes}/${outdir}/githashes/commithash_${jobnum}.txt"
+
+xrdfs ${t2_prefixes} mkdir -p "/${outdir}/pickles"
+xrdcp -f *.pkl "${t2_prefixes}/${outdir}/pickles/out_${jobnum}.pkl"
+
+# 2. Next, handle the combined parquet files
+for file in *.parquet; do
+    # Extract the region name from the local filename (e.g., gets "control-tt" from "control-tt.parquet")
+    region_name=$$(basename "$${file}" ".parquet")
+
+    # Create the region-specific subdirectory on EOS
+    xrdfs ${t2_prefixes} mkdir -p "/${outdir}/parquet/$${region_name}"
+
+    # Define the final filename using the job number for uniqueness
+    final_filename="part${jobnum}.parquet"
+
+    # Copy the file to its final, nested destination with the new name
+    xrdcp -f "$$file" "${t2_prefixes}/${outdir}/parquet/$${region_name}/$${final_filename}"
+done
 
 
 
