@@ -18,8 +18,7 @@ done
 (
     r=3
     # shallow clone of single branch (keep repo size as small as possible)
-    #while ! git clone --single-branch --branch $branch --depth=1 https://github.com/DAZSLE/hbb-run3.git
-    while ! git clone --single-branch --branch $branch --depth=1 https://github.com/gabihamilton/hbb-run3.git
+    while ! git clone --single-branch --branch $branch --depth=1 https://github.com/DAZSLE/hbb-run3.git
     do
         ((--r)) || exit
         sleep 60
@@ -28,8 +27,7 @@ done
 cd hbb-run3 || exit
 
 commithash=$$(git rev-parse HEAD)
-#echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
-echo "https://github.com/gabihamilton/hbb-run3/commit/$${commithash}" > commithash.txt
+echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
 
 pip install -e .
 
@@ -38,13 +36,6 @@ python -u -W ignore $script --year $year --starti $starti --endi $endi --samples
 
 # Move final output to EOS
 # This new logic recursively copies the region directories created by the processor
-
-
-# 2. Recursively copy the entire parquet directory structure
-#LOCAL_PARQUET_DIR="outparquet/${year}/${subsample}/parquet"
-#if [ -d "$$LOCAL_PARQUET_DIR" ]; then
-#    xrdcp -r -f $$LOCAL_PARQUET_DIR ${t2_prefixes}/${outdir}/
-#fi
 
 # --- FINAL COPY LOGIC ---
 # This logic creates the nested structure and partN.parquet names
