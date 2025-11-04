@@ -205,10 +205,9 @@ class categorizer(SkimmerABC):
         selection.add("not2FJ", ak.num(goodfatjets, axis=1) != 2)
 
         if "v12" in self._nano_version:
-            xbbfatjets = goodfatjets[ ak.argsort(goodfatjets.pnetXbbXcc, axis=1, ascending=False) ]
+            xbbfatjets = goodfatjets[ak.argsort(goodfatjets.pnetXbbXcc, axis=1, ascending=False)]
         else:
-            xbbfatjets = goodfatjets[ ak.argsort(goodfatjets.ParTPXbbXcc, axis=1, ascending=False) ]
-
+            xbbfatjets = goodfatjets[ak.argsort(goodfatjets.ParTPXbbXcc, axis=1, ascending=False)]
 
         candidatejet = ak.firsts(xbbfatjets[:, 0:1])
         subleadingjet = ak.firsts(xbbfatjets[:, 1:2])
@@ -257,7 +256,7 @@ class categorizer(SkimmerABC):
             ak.max(ak4_outside_ak8.btagPNetB, axis=1, mask_identity=False) > btag_cut,
         )
 
-        met = events.PuppiMET   #PuppiMET Recommended for Run3
+        met = events.PuppiMET  # PuppiMET Recommended for Run3
         selection.add("lowmet", met.pt < 140.0)
 
         # VBF specific variables
@@ -452,6 +451,8 @@ class categorizer(SkimmerABC):
                 "VBFPair_mjj": vbf_mjj,
                 "VBFPair_deta": vbf_deta,
                 "Photon0_pt": leadingphoton.pt,
+                "Photon0_phi": leadingphoton.phi,
+                "Photon0_eta": leadingphoton.eta,
                 "MET": met,
                 "weight": nominal_weight,
                 "genWeight": gen_weight,
@@ -479,10 +480,10 @@ class categorizer(SkimmerABC):
                 "FatJet1_ParTPXccVsQCD": candidatejet.ParTPXccVsQCD,
                 "FatJet1_ParTPXbbXcc": candidatejet.ParTPXbbXcc,
                 "FatJet1_ParTmassGeneric": candidatejet.ParTmassGeneric,
-                "FatJet1_ParTmassX2p": candidatejet.ParTmassX2p
+                "FatJet1_ParTmassX2p": candidatejet.ParTmassX2p,
             }
 
-            if not "v12" in self._nano_version:
+            if "v12" not in self._nano_version:
                 output_array = {**output_array, **parT_array}
 
             # extra variables for big array
