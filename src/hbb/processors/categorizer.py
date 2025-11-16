@@ -13,6 +13,7 @@ from hist.dask import Hist
 import dask
 
 from hbb.jerc_eras import run_map, variation_map
+from hbb.taggers import b_taggers
 
 from hbb.corrections import (
     add_pileup_weight,
@@ -23,7 +24,8 @@ from hbb.corrections import (
     get_jetveto_event,
     lumiMasks,
     correct_met,
-    apply_jerc
+    apply_jerc,
+    add_btag_weights
 )
 from hbb.processors.SkimmerABC import SkimmerABC
 
@@ -74,6 +76,7 @@ class categorizer(SkimmerABC):
         systematics=False,
         save_skim=False,
         skim_outpath="",
+        btag_eff=False
     ):
         super().__init__()
 
@@ -84,6 +87,9 @@ class categorizer(SkimmerABC):
         self._systematics = systematics
         self._save_skim = save_skim
         self._skim_outpath = skim_outpath
+        self._btag_eff = btag_eff
+        self._btagger, self._btag_wp = "btagPNetB", "M"
+        self._btag_cut = b_taggers[self._year]["AK4"][self._btagger][self._btag_wp]
 
         with Path("src/hbb/muon_triggers.json").open() as f:
             self._muontriggers = json.load(f)
@@ -98,9 +104,6 @@ class categorizer(SkimmerABC):
         with Path("src/hbb/metfilters.json").open() as f:
             self._met_filters = json.load(f)
 
-        with Path("src/hbb/taggers.json").open() as f:
-            self._b_taggers = json.load(f)
-
         self.make_output = lambda: {
             "sumw": {},
             "cutflow": Hist.new.StrCat([], growth=True, name="region", label="Region")
@@ -112,11 +115,19 @@ class categorizer(SkimmerABC):
             "skim": {},
         }
 
+        self.make_btag_output = lambda: (
+            Hist.new.StrCat([], growth=True, name="tagger", label="Tagger")
+            .Reg(2, 0, 2, name="passWP", label="passWP")
+            .Variable([0, 4, 5], name="flavor", label="Jet hadronFlavour")
+            .Variable([20, 30, 50, 70, 100, 140, 200, 300, 600, 1000], name="pt", label="Jet pt")
+            .Reg(4, 0, 2.5, name="abseta", label="Jet abseta").Weight()
+        )
+
     def process(self, events):
         if not self._save_skim:
             return {"nominal": self.process_shift(events, "nominal")}
 
-        jerc_variations = ["nominal"] + [f"{var}_{dir}" for var in variation_map for dir in ["Up", "Down"]]
+        jerc_variations = ["nominal"]# + [f"{var}_{dir}" for var in variation_map for dir in ["Up", "Down"]]
         return {var: self.process_shift(events, var) for var in jerc_variations}
     
 
@@ -125,12 +136,16 @@ class categorizer(SkimmerABC):
         weights,
         events,
         dataset,
+        btag_jets
     ) -> tuple[dict, dict]:
         """Adds weights and variations, saves totals for all norm preserving weights and variations"""
         weights.add("genweight", events.genWeight)
 
         add_pileup_weight(weights, self._year, events.Pileup.nPU)
         add_ps_weight(weights, events.PSWeight)
+        btag_SF = 1.
+        if not self._btag_eff:
+            btag_SF = add_btag_weights(weights, btag_jets, self._btagger, self._btag_wp, self._year, dataset)
 
         #Easier to save nominal weights for rest of MC with all of the syst names for grabbing columns in post-processing
         flag_syst = ("Hto2B" in dataset) or ("Hto2C" in dataset) or ("VBFZto" in dataset)
@@ -164,16 +179,16 @@ class categorizer(SkimmerABC):
         # save the unnormalized weight, to confirm that it's been normalized in post-processing
         weights_dict["weight_noxsec"] = weights.weight()
 
-        return weights_dict, totals_dict
+        return weights_dict, totals_dict, btag_SF
 
     def process_shift(self, events, shift_name):
 
         dataset = events.metadata["dataset"]
         isRealData = not hasattr(events, "genWeight")
         selection = PackedSelection()
-        output = self.make_output()
+        output = self.make_output() if not self._btag_eff else self.make_btag_output()
         weights = Weights(None, storeIndividual=True)
-        if shift_name is "nominal" and not isRealData:
+        if shift_name == "nominal" and not isRealData and not self._btag_eff:
             output["sumw"][dataset] = ak.sum(events.genWeight)
 
         trigger = ak.values_astype(ak.zeros_like(events.run), bool)
@@ -292,18 +307,21 @@ class categorizer(SkimmerABC):
             ak4_outside_ak8[ak.argmin(ak4_outside_ak8.delta_r(candidatejet), axis=1, keepdims=True)]
         )
 
-        btag_cut = self._b_taggers[self._year]["AK4"]["Jet_btagPNetB"]["M"]
         selection.add(
             "antiak4btagMediumOppHem",
-            ak.max(ak4_opphem_ak8.btagPNetB, axis=1, mask_identity=False) < btag_cut,
+            ak.max(getattr(ak4_opphem_ak8, self._btagger), axis=1, mask_identity=False) < self._btag_cut,
         )
         selection.add(
             "antiak4btagMedium",
-            ak.max(ak4_outside_ak8.btagPNetB, axis=1, mask_identity=False) < btag_cut,
+            ak.max(getattr(ak4_outside_ak8, self._btagger), axis=1, mask_identity=False) < self._btag_cut,
         )
         selection.add(
             "ak4btagMedium08",
-            ak.max(ak4_outside_ak8.btagPNetB, axis=1, mask_identity=False) > btag_cut,
+            ak.max(getattr(ak4_outside_ak8, self._btagger), axis=1, mask_identity=False) > self._btag_cut,
+        )
+        selection.add(
+            "allgoodak4btagMedium",
+            ak.max(getattr(goodjets, self._btagger), axis=1, mask_identity=False) > self._btag_cut,
         )
 
         selection.add("lowmet", met.pt < 140.0)
@@ -348,14 +366,16 @@ class categorizer(SkimmerABC):
         selection.add("passphotonveto", (nphotons == 0))
 
         gen_variables = {}
+        btag_SF = 1.
         if isRealData:
             genflavor = ak.zeros_like(candidatejet.pt)
             genBosonPt = ak.zeros_like(candidatejet.pt)
         else:
-            weights_dict, totals_temp = self.add_weights(
+            weights_dict, totals_temp, btag_SF = self.add_weights(
                 weights,
                 events,
                 dataset,
+                ak4_opphem_ak8  #TODO solve for differing region selections (mucr + vgamma query different jets)
             )
             for d, gen_func in gen_selection_dict.items():
                 if d in dataset:
@@ -441,13 +461,15 @@ class categorizer(SkimmerABC):
             ],
         }
 
-        def normalize(val, cut):
-            if cut is None:
-                ar = ak.fill_none(val, np.nan)
-                return ar
-            else:
-                ar = ak.fill_none(val[cut], np.nan)
-                return ar
+        btag_eff_cuts = [
+                "trigger",
+                "lumimask",
+                "metfilter",
+                "ak4jetveto",
+                "minjetkin",
+                "lowmet",
+                "noleptons"
+        ]
 
         tic = time.time()
 
@@ -460,6 +482,19 @@ class categorizer(SkimmerABC):
                 egamma_trigger_booleans[t] = events.HLT[t]
             else:
                 egamma_trigger_booleans[t] = ak.values_astype(ak.zeros_like(events.run), bool)
+
+        if self._btag_eff:
+            cut = selection.all(*btag_eff_cuts)
+            flat_gj = ak.flatten(goodjets)
+
+            output.fill(
+                tagger=self._btagger,
+                abseta=self.normalize(abs(flat_gj.eta), cut),
+                pt=self.normalize(flat_gj.pt, cut),
+                flavor=self.normalize(flat_gj.hadronFlavour, cut),
+                passWP=self.normalize(getattr(flat_gj, self._btagger) > self._btag_cut, cut),
+            )
+            return output
 
         output_array = None
         if self._save_skim:
@@ -615,12 +650,14 @@ class categorizer(SkimmerABC):
             )
 
             if shift_name == "nominal":
+
+                #Fill cutflow hist
                 allcuts = set()
                 cut = selection.all(*allcuts)
                 output["cutflow"].fill(
                     dataset=dataset,
                     region=region,
-                    genflavor=normalize(genflavor, None),
+                    genflavor=self.normalize(genflavor, None),
                     cut=0,
                     weight=nominal_weight,
                 )
@@ -630,11 +667,17 @@ class categorizer(SkimmerABC):
                     output["cutflow"].fill(
                         dataset=dataset,
                         region=region,
-                        genflavor=normalize(genflavor, cut),
+                        genflavor=self.normalize(genflavor, cut),
                         cut=i + 1,
                         weight=nominal_weight[cut],
                     )
-        
+
+                #Fill btag SF hist
+                cut = selection.all(*selections)
+                output["btagWeight"].fill(
+                    val=self.normalize(btag_SF, cut)
+                )
+
         if shift_name == "nominal":
             for region in regions:
                 if self._save_skim:

@@ -12,7 +12,7 @@ from pathlib import Path
 import dask
 import uproot
 import yaml
-from coffea import nanoevents
+from coffea import nanoevents, util
 from coffea.dataset_tools import apply_to_fileset, max_chunks, preprocess
 
 from hbb.run_utils import get_dataset_spec, get_fileset
@@ -90,6 +90,7 @@ def run(year: str, fileset: dict, args: argparse.Namespace):
         nano_version=args.nano_version,
         save_skim=args.save_skim,
         skim_outpath="outparquet",
+        btag_eff=args.btag_eff
     )
 
     full_tg, rep = apply_to_fileset(
@@ -231,10 +232,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--yaml", default=None, help="yaml file with samples and subsamples", type=str
     )
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
         "--save-skim",
         action="store_true",
         help="save skimmed (flat ntuple) files",
+        default=False,
+    )
+    group.add_argument(
+        "--btag-eff",
+        action="store_true",
+        help="compute b-tag efficiencies for mc",
         default=False,
     )
 

@@ -21,8 +21,10 @@ from coffea.nanoevents.methods import vector
 from coffea.nanoevents.methods.nanoaod import JetArray
 from coffea.jetmet_tools import CorrectedJetsFactory, CorrectedMETFactory, JECStack
 from coffea.lookup_tools import extractor
+import pickle
 
 from hbb.jerc_eras import jec_eras,jer_eras, jec_mc, jer_mc, jec_data, fatjet_jerc_keys, jet_jerc_keys
+from hbb.taggers import b_taggers
 
 ak.behavior.update(vector.behavior)
 package_path = str(pathlib.Path(__file__).parent.parent.resolve())
@@ -327,3 +329,90 @@ def correct_met(met, jets):
     corrected_met = met_factory.build(met, jets)
 
     return corrected_met
+
+def add_btag_weights(weights, jets, btagger, wp, year, dataset):
+    if "PNet" in btagger:
+        sys_name = "particleNet"
+    elif "RobustParT" in btagger:
+        sys_name = "robustParticleTransformer"
+    elif "DeepFlav" in btagger:
+        sys_name = "deepJet"
+
+    cset = correctionlib.CorrectionSet.from_file(get_pog_json("btagging", year))
+    btag_cut = b_taggers[year]["AK4"][btagger][wp]
+
+    eff_file = f"{package_path}/hbb/data/btag/mc_eff_{btagger}_{year}.pkl"
+    with open(eff_file, 'rb') as f:
+        lookup_dict = pickle.load(f)
+
+    def eff_lookup(x, y, z): return lookup_dict[dataset](x, y, z)
+
+    jets_l = jets[(jets.hadronFlavour == 0) & (abs(jets.eta)<2.5)]
+    jets_b = jets[(jets.hadronFlavour == 4) & (abs(jets.eta)<2.5)]
+    jets_c = jets[(jets.hadronFlavour == 5) & (abs(jets.eta)<2.5)]
+
+    pass_l = getattr(jets_l, btagger) > btag_cut
+    pass_b = getattr(jets_b, btagger) > btag_cut
+    pass_c = getattr(jets_c, btagger) > btag_cut
+
+    eff_l = eff_lookup(jets_l.hadronFlavour, jets_l.pt, abs(jets_l.eta))
+    eff_b = eff_lookup(jets_b.hadronFlavour, jets_b.pt, abs(jets_b.eta))
+    eff_c = eff_lookup(jets_c.hadronFlavour, jets_c.pt, abs(jets_c.eta))
+
+    def calc_weight(eff, sf, pass_tag):
+        tagged = ak.prod(sf, axis=-1)
+        untagged = ak.prod(((1 - sf*eff) / (1 - eff))[~pass_tag], axis=-1)
+        return ak.fill_none(tagged * untagged, 1.)
+    
+    def get_sf(jets, j_flav, syst):
+        j, nj = ak.flatten(jets), ak.num(jets)
+        sf = cset[f"{sys_name}_{j_flav}"].evaluate(syst, wp, j.hadronFlavour, abs(j.eta), j.pt)
+        return ak.unflatten(sf, nj)
+
+    weight_l = calc_weight( eff_l, get_sf(jets_l, "light", "central"), pass_l )
+    weight_b = calc_weight( eff_b, get_sf(jets_b, "comb", "central"), pass_b )
+    weight_c = calc_weight( eff_c, get_sf(jets_c, "comb", "central"), pass_c )
+
+    weights.add('btagLightSF', weight_l)
+    weights.add('btagBSF', weight_b)
+    weights.add('btagCSF', weight_c)
+    
+    nominal = weight_l * weight_b * weight_c
+
+    weights.add(
+        f"btagSFlight_{year}",
+        ak.ones_like(nominal),
+        weightUp=calc_weight(eff_l, get_sf(jets_l, "light", "up"), pass_l),
+        weightDown=calc_weight(eff_l, get_sf(jets_l, "light", "down"), pass_l),
+    )
+    weights.add(
+        f"btagSFb_{year}",
+        ak.ones_like(nominal),
+        weightUp=calc_weight(eff_b, get_sf(jets_b, "comb", "up"), pass_b),
+        weightDown=calc_weight(eff_b, get_sf(jets_b, "comb", "down"), pass_b),
+    )
+    weights.add(
+        f"btagSFc_{year}",
+        ak.ones_like(nominal),
+        weightUp=calc_weight(eff_c, get_sf(jets_c, "comb", "up"), pass_c),
+        weightDown=calc_weight(eff_c, get_sf(jets_c, "comb", "down"), pass_c),
+    )
+    weights.add(
+        'btagSFlight_correlated', 
+        ak.ones_like(nominal),
+        weightUp=calc_weight(eff_l, get_sf(jets_l, "light", "up_correlated"), pass_l),
+        weightDown=calc_weight(eff_l, get_sf(jets_l, "light", "down_correlated"), pass_l),
+    )
+    weights.add(
+        'btagSFb_correlated', 
+        ak.ones_like(nominal),
+        weightUp=calc_weight(eff_b, get_sf(jets_b, "comb", "up_correlated"), pass_b),
+        weightDown=calc_weight(eff_b, get_sf(jets_b, "comb", "down_correlated"), pass_b),
+    )
+    weights.add(
+        'btagSFc_correlated', 
+        ak.ones_like(nominal),
+        weightUp=calc_weight(eff_c, get_sf(jets_c, "comb", "up_correlated"), pass_c),
+        weightDown=calc_weight(eff_c, get_sf(jets_c, "comb", "down_correlated"), pass_c),
+    )
+    return nominal
