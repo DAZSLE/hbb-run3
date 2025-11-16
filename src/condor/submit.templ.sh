@@ -31,8 +31,8 @@ echo "https://github.com/DAZSLE/hbb-run3/commit/$${commithash}" > commithash.txt
 
 pip install -e .
 
-# run code (saving skim always)
-python -u -W ignore $script --year $year --starti $starti --endi $endi --samples $sample --subsamples $subsample --nano-version ${nano_version} --save-skim
+# run code 
+python -u -W ignore $script --year $year --starti $starti --endi $endi --samples $sample --subsamples $subsample --nano-version ${nano_version} --${run_mode}
 
 # Move final output to EOS
 # This new logic recursively copies the region directories created by the processor
