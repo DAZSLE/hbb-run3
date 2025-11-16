@@ -228,11 +228,28 @@ def ggfvbf_rhalphabet(args):
     #Systematics
     sys_dict = {}
     sys_dict['pileup'] = rl.NuisanceParameter('CMS_PU_{}'.format(year), 'lnN')
+
     sys_dict['JES'] = rl.NuisanceParameter('CMS_scale_j_{}'.format(year), 'lnN')
     sys_dict['JER'] = rl.NuisanceParameter('CMS_res_j_{}'.format(year), 'lnN')
     sys_dict['UES'] = rl.NuisanceParameter('CMS_ues_j_{}'.format(year), 'lnN')
 
-    exp_systs = ['pileup', 'JES', 'JER', 'JER']
+    sys_dict['btagSFb'] = rl.NuisanceParameter('CMS_btagSFb_{}'.format(year), 'lnN')
+    sys_dict['btagSFc'] = rl.NuisanceParameter('CMS_btagSFc_{}'.format(year), 'lnN')
+    sys_dict['btagSFlight'] = rl.NuisanceParameter('CMS_btagSFlight_{}'.format(year), 'lnN')
+    sys_dict['btagSFb_correlated'] = rl.NuisanceParameter('CMS_btagSFb_correlated_{}'.format(year), 'lnN')
+    sys_dict['btagSFc_correlated'] = rl.NuisanceParameter('CMS_btagSFc_correlated_{}'.format(year), 'lnN')
+    sys_dict['btagSFlight_correlated'] = rl.NuisanceParameter('CMS_btagSFlight_correlated_{}'.format(year), 'lnN')
+
+    exp_systs = [
+        'pileup', 
+        'JES', 'JER', 'JER',
+        'btagSFb',
+        'btagSFc',
+        'btagSFlight'
+        'btagSFb_correlated',
+        'btagSFc_correlated',
+        'btagSFlight_correlated'
+    ]
 
     pdf_Higgs_ggF = rl.NuisanceParameter('pdf_Higgs_ggF','lnN')
     pdf_Higgs_VBF = rl.NuisanceParameter('pdf_Higgs_VBF','lnN')
