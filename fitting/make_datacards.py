@@ -219,33 +219,33 @@ def ggfvbf_rhalphabet(args):
     total_model_bins = []
 
     # TT params
-    tqqeffSF = rl.IndependentParameter('tqqeffSF_{}'.format(year), 1., -50, 50)
-    tqqeffBCSF = rl.IndependentParameter('tqqeffBCSF_{}'.format(year), 1., -50, 50)
-    tqqnormSF = rl.IndependentParameter('tqqnormSF_{}'.format(year), 1., -50, 50)
+    tqqeffSF = rl.IndependentParameter(f'tqqeffSF_{year}', 1., -50, 50)
+    tqqeffBCSF = rl.IndependentParameter(f'tqqeffBCSF_{year}', 1., -50, 50)
+    tqqnormSF = rl.IndependentParameter(f'tqqnormSF_{year}', 1., -50, 50)
 
-    sys_lumi_uncor = rl.NuisanceParameter('CMS_lumi_13p6TeV_{}'.format(year[:4]), 'lnN')
+    sys_lumi_uncor = rl.NuisanceParameter(f'_lumi_13p6TeV_{year[:4]}', 'lnN')
 
     #Systematics
     sys_dict = {}
-    sys_dict['pileup'] = rl.NuisanceParameter('CMS_PU_{}'.format(year), 'lnN')
+    sys_dict['pileup'] = rl.NuisanceParameter(f'_PU_{year}', 'lnN')
 
-    sys_dict['JES'] = rl.NuisanceParameter('CMS_scale_j_{}'.format(year), 'lnN')
-    sys_dict['JER'] = rl.NuisanceParameter('CMS_res_j_{}'.format(year), 'lnN')
-    sys_dict['UES'] = rl.NuisanceParameter('CMS_ues_j_{}'.format(year), 'lnN')
+    sys_dict['JES'] = rl.NuisanceParameter(f'_scale_j_{year}', 'lnN')
+    sys_dict['JER'] = rl.NuisanceParameter(f'_res_j_{year}', 'lnN')
+    sys_dict['UES'] = rl.NuisanceParameter(f'_ues_j_{year}', 'lnN')
 
-    sys_dict['btagSFb'] = rl.NuisanceParameter('CMS_btagSFb_{}'.format(year), 'lnN')
-    sys_dict['btagSFc'] = rl.NuisanceParameter('CMS_btagSFc_{}'.format(year), 'lnN')
-    sys_dict['btagSFlight'] = rl.NuisanceParameter('CMS_btagSFlight_{}'.format(year), 'lnN')
-    sys_dict['btagSFb_correlated'] = rl.NuisanceParameter('CMS_btagSFb_correlated_{}'.format(year), 'lnN')
-    sys_dict['btagSFc_correlated'] = rl.NuisanceParameter('CMS_btagSFc_correlated_{}'.format(year), 'lnN')
-    sys_dict['btagSFlight_correlated'] = rl.NuisanceParameter('CMS_btagSFlight_correlated_{}'.format(year), 'lnN')
+    sys_dict[f'btagSFb_{year}'] = rl.NuisanceParameter(f'_btagSFb_{year}', 'lnN')
+    sys_dict[f'btagSFc_{year}'] = rl.NuisanceParameter(f'_btagSFc_{year}', 'lnN')
+    sys_dict[f'btagSFlight_{year}'] = rl.NuisanceParameter(f'_btagSFlight_{year}', 'lnN')
+    sys_dict['btagSFb_correlated'] = rl.NuisanceParameter(f'_btagSFb_correlated_{year}', 'lnN')
+    sys_dict['btagSFc_correlated'] = rl.NuisanceParameter(f'_btagSFc_correlated_{year}', 'lnN')
+    sys_dict['btagSFlight_correlated'] = rl.NuisanceParameter(f'_btagSFlight_correlated_{year}', 'lnN')
 
     exp_systs = [
         'pileup', 
         'JES', 'JER', 'JER',
-        'btagSFb',
-        'btagSFc',
-        'btagSFlight'
+        f'btagSFb_{year}',
+        f'btagSFc_{year}',
+        f'btagSFlight_{year}'
         'btagSFb_correlated',
         'btagSFc_correlated',
         'btagSFlight_correlated'
