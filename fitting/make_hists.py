@@ -90,7 +90,7 @@ def main(args):
     year = args.year
     tag = args.tag
 
-    path_to_dir = f"/eos/uscms/store/group/lpchbbrun3/lzygala/{tag}"
+    path_to_dir = f"/eos/uscms/store/group/lpchbbrun3/skims/{tag}"
     
     samples_qq = ['Wjets','Zjets','EWKW','EWKZ','EWKV']
 
@@ -112,7 +112,7 @@ def main(args):
         "GenFlavor",
     ]
 
-    columns_systs = [
+    systs = [
         'ISRPartonShower',
         'FSRPartonShower', 
         'aS_weight',
@@ -121,11 +121,24 @@ def main(args):
         'scalevar_7pt', 
         'scalevar_3pt',
         'pileup',
+        'btagSFb_correlated',
+        'btagSFc_correlated',
+        'btagSFlight_correlated'
+    ]
+    year_systs = [
+        'btagSFb',
+        'btagSFc',
+        'btagSFlight',
     ]
 
-    data_dirs = [Path(path_to_dir) / year]
+    data_dirs = {year: Path(path_to_dir) / year}
     if args.year == "Run3":
-        data_dirs = [Path(path_to_dir) / "2022", Path(path_to_dir) / "2022EE", Path(path_to_dir) / "2023", Path(path_to_dir) / "2023BPix"]
+        data_dirs={
+            "2022":Path(path_to_dir) / "2022",
+            "2022EE":Path(path_to_dir) / "2022EE",
+            "2023":Path(path_to_dir) / "2023",
+            "2023BPix":Path(path_to_dir) / "2023BPix",
+        }
 
     out_path = f"results/{tag}/{year}"
     output_file = f"{out_path}/signalregion.root"
@@ -161,15 +174,16 @@ def main(args):
     for process, datasets in pmap.items():
         for dataset in datasets:
             for reg, cfg in cats.items():
-                for data_dir in data_dirs:
+                for year, data_dir in data_dirs.items():
                     for var in jerc_variations:
 
                         if not var:
+                            c_systs_full = systs + [f"{syst}_{year}" for syst in year_systs]
+                            c_systs_full = [f"{syst}{dir}" for syst in c_systs_full for dir in ["Up", "Down"]]
                             events = utils.load_samples(
                                 data_dir,
                                 {process: [dataset]},
-                                columns=columns if "data" in process else 
-                                        columns+[f"{syst}{dir}" for syst in columns_systs for dir in ["Up", "Down"]],
+                                columns=columns if "data" in process else columns+c_systs_full,
                                 region=cfg["name"],
                                 filters=filters,
                                 variation=var
@@ -181,9 +195,8 @@ def main(args):
                             fill_hists(out_hists, events, reg, cfg, obs_cfg, (process in samples_qq), "nominal", var)
 
                             if "data" not in process:
-                                for syst in columns_systs:
-                                    for direction in ["Up", "Down"]:
-                                        fill_hists(out_hists, events, reg, cfg, obs_cfg, (process in samples_qq), f"{syst}{direction}", var)
+                                for syst in c_systs_full:
+                                    fill_hists(out_hists, events, reg, cfg, obs_cfg, (process in samples_qq), f"{syst}", var)
 
                         else:   #jerc variations
                             for direction in ["Up", "Down"]:
