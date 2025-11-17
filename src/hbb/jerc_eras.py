@@ -76,7 +76,7 @@ jer_eras = {
     "2024_mc": "Summer23BPixPrompt23RunD_JRV1_MC",
 }
 
-variation_map = {
+jerc_variations = {
     "JES": "JES_jes",
     "JER": "JER",
     "UES": "MET_UnclusteredEnergy",
