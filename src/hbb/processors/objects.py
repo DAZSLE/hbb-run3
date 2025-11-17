@@ -45,9 +45,9 @@ def tight_photons(photons: PhotonArray):
     return photons[sel]
 
 
-def good_muons(muons: MuonArray):
+def good_muons(muons: MuonArray, pt_type):
     sel = (
-        (muons.pt > 10)
+        (getattr(muons, pt_type) > 10)
         & (np.abs(muons.eta) < 2.4)
         & (muons.looseId)
         & (muons.pfRelIso04_all < 0.15)

@@ -16,13 +16,14 @@ import awkward as ak
 import dask_awkward as dak
 import numpy as np
 import correctionlib
+import pickle
 from coffea.analysis_tools import Weights
 from coffea.nanoevents.methods import vector
 from coffea.nanoevents.methods.nanoaod import JetArray
 from coffea.jetmet_tools import CorrectedJetsFactory, CorrectedMETFactory, JECStack
 from coffea.lookup_tools import extractor
-import pickle
 
+from hbb.MuonScaRe import pt_resol, pt_scale, pt_resol_var, pt_scale_var 
 from hbb.jerc_eras import jec_eras,jer_eras, jec_mc, jer_mc, jec_data, fatjet_jerc_keys, jet_jerc_keys
 from hbb.taggers import b_taggers
 
@@ -418,7 +419,7 @@ def add_btag_weights(weights, jets, btagger, wp, year, dataset):
     )
     return nominal
 
-def add_muon_weights(weights, year, muons):
+def add_muon_weights(weights, year, muons, pt_type):
 
     id_key = "NUM_LooseID_DEN_TrackerMuons"
     iso_key = "NUM_LoosePFIso_DEN_LooseID"
@@ -426,13 +427,13 @@ def add_muon_weights(weights, year, muons):
     
     cset = correctionlib.CorrectionSet.from_file(get_pog_json("muon", year))
 
-    id_nom = cset[id_key].evaluate(abs(muons.eta), muons.pt, "nominal")
-    id_up = cset[id_key].evaluate(abs(muons.eta), muons.pt, "systup")
-    id_down = cset[id_key].evaluate(abs(muons.eta), muons.pt, "systdown")
+    id_nom = cset[id_key].evaluate(abs(muons.eta), getattr(muons, pt_type), "nominal")
+    id_up = cset[id_key].evaluate(abs(muons.eta), getattr(muons, pt_type), "systup")
+    id_down = cset[id_key].evaluate(abs(muons.eta), getattr(muons, pt_type), "systdown")
 
-    iso_nom = cset[iso_key].evaluate(abs(muons.eta), muons.pt, "nominal")
-    iso_up = cset[iso_key].evaluate(abs(muons.eta), muons.pt, "systup")
-    iso_down = cset[iso_key].evaluate(abs(muons.eta), muons.pt, "systdown")
+    iso_nom = cset[iso_key].evaluate(abs(muons.eta), getattr(muons, pt_type), "nominal")
+    iso_up = cset[iso_key].evaluate(abs(muons.eta), getattr(muons, pt_type), "systup")
+    iso_down = cset[iso_key].evaluate(abs(muons.eta), getattr(muons, pt_type), "systdown")
 
     weights.add("muon_ID", id_nom, id_up, id_down)
     weights.add("muon_ISO", iso_nom, iso_up, iso_down)
@@ -460,3 +461,29 @@ def add_photon_weights(weights, year, photons):
     weights.add("photon_ID", id_nom, id_up, id_down)
 
     return
+
+mupt_variations = {
+    "MuonPTScale" : "ptscalecorr",
+    "MuonPTRes" : "ptcorr_resol"
+}
+
+def correct_muons(muons, events, year, isRealData):
+
+    c_file =f"{package_path}/hbb/data/mupt/{years[year]}.json"
+    cset = correctionlib.CorrectionSet.from_file(c_file)
+
+    if isRealData:
+        muons["ptcorr"] = pt_scale(1, muons.pt, muons.eta, muons.phi, muons.charge, cset, nested=True)
+
+    else:
+        muons["ptscalecorr"] = pt_scale(0, muons.pt, muons.eta,  muons.phi, muons.charge, cset, nested=True)
+        muons["ptcorr"] = pt_resol( muons.ptscalecorr, muons.eta, muons.phi, muons.nTrackerLayers, 
+                                   events.event, events.luminosityBlock, cset, nested=True)
+
+        muons["ptscalecorr_up"] = pt_scale_var(muons.ptcorr, muons.eta, muons.phi, muons.charge, "up", cset, nested=True)
+        muons["ptscalecorr_down"] = pt_scale_var(muons.ptcorr, muons.eta, muons.phi, muons.charge, "dn", cset, nested=True)
+
+        muons["ptcorr_resol_up"] = pt_resol_var(muons.ptscalecorr, muons.ptcorr, muons.eta, "up", cset, nested=True)
+        muons["ptcorr_resol_down"] = pt_resol_var(muons.ptscalecorr, muons.ptcorr, muons.eta, "dn", cset, nested=True)
+
+    return muons
