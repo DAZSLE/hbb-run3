@@ -481,14 +481,14 @@ class categorizer(SkimmerABC):
                 "muonkin",
                 "muonDphiAK8",
             ],
-            # "control-zgamma": [
-            #     "egammatrigger",
-            #     "lumimask",
-            #     "metfilter",
-            #     "minjetkin_zgamma",
-            #     "atleastonephoton",
-            #     "antiak4btagMedium",
-            # ],
+            "control-zgamma": [
+                "egammatrigger",
+                "lumimask",
+                "metfilter",
+                "minjetkin_zgamma",
+                "atleastonephoton",
+                "antiak4btagMedium",
+            ],
         }
 
         btag_eff_cuts = [
