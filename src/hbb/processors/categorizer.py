@@ -291,8 +291,9 @@ class categorizer(SkimmerABC):
 
         goodphotons = good_photons(events.Photon)
         nphotons = ak.num(goodphotons, axis=1)
-        leadingphoton = ak.firsts(goodphotons)
-        ntightphotons = ak.num(tight_photons(events.Photon), axis=1)
+        tightphotons = tight_photons(events.Photon)
+        ntightphotons = ak.num(tightphotons, axis=1)
+        leadingphoton = ak.firsts(tightphotons)
 
         selection.add("onephoton", (nphotons == 1))
         selection.add("atleastonephoton", (ntightphotons >= 1))
