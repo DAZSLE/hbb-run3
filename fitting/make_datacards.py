@@ -223,22 +223,25 @@ def ggfvbf_rhalphabet(args):
     tqqeffBCSF = rl.IndependentParameter(f'tqqeffBCSF_{year}', 1., -50, 50)
     tqqnormSF = rl.IndependentParameter(f'tqqnormSF_{year}', 1., -50, 50)
 
-    sys_lumi_uncor = rl.NuisanceParameter(f'_lumi_13p6TeV_{year[:4]}', 'lnN')
+    sys_lumi_uncor = rl.NuisanceParameter(f'CMS_lumi_13p6TeV_{year[:4]}', 'lnN')
 
-    #Systematics
+    #Systematics 
     sys_dict = {}
-    sys_dict['pileup'] = rl.NuisanceParameter(f'_PU_{year}', 'lnN')
+    sys_dict['pileup'] = rl.NuisanceParameter(f'CMS_PU_{year}', 'lnN')
 
-    sys_dict['JES'] = rl.NuisanceParameter(f'_scale_j_{year}', 'lnN')
-    sys_dict['JER'] = rl.NuisanceParameter(f'_res_j_{year}', 'lnN')
-    sys_dict['UES'] = rl.NuisanceParameter(f'_ues_j_{year}', 'lnN')
+    sys_dict['JES'] = rl.NuisanceParameter(f'CMS_scale_j_{year}', 'lnN')
+    sys_dict['JER'] = rl.NuisanceParameter(f'CMS_res_j_{year}', 'lnN')
+    sys_dict['UES'] = rl.NuisanceParameter(f'CMS_ues_j_{year}', 'lnN')
 
-    sys_dict[f'btagSFb_{year}'] = rl.NuisanceParameter(f'_btagSFb_{year}', 'lnN')
-    sys_dict[f'btagSFc_{year}'] = rl.NuisanceParameter(f'_btagSFc_{year}', 'lnN')
-    sys_dict[f'btagSFlight_{year}'] = rl.NuisanceParameter(f'_btagSFlight_{year}', 'lnN')
-    sys_dict['btagSFb_correlated'] = rl.NuisanceParameter(f'_btagSFb_correlated_{year}', 'lnN')
-    sys_dict['btagSFc_correlated'] = rl.NuisanceParameter(f'_btagSFc_correlated_{year}', 'lnN')
-    sys_dict['btagSFlight_correlated'] = rl.NuisanceParameter(f'_btagSFlight_correlated_{year}', 'lnN')
+    sys_dict['MuonPTScale'] = rl.NuisanceParameter(f'CMS_scale_m_{year}', 'lnN')
+    sys_dict['MuonPTRes'] = rl.NuisanceParameter(f'CMS_res_m_{year}', 'lnN')
+
+    sys_dict[f'btagSFb_{year}'] = rl.NuisanceParameter(f'CMS_btagSFb_{year}', 'lnN')
+    sys_dict[f'btagSFc_{year}'] = rl.NuisanceParameter(f'CMS_btagSFc_{year}', 'lnN')
+    sys_dict[f'btagSFlight_{year}'] = rl.NuisanceParameter(f'CMS_btagSFlight_{year}', 'lnN')
+    sys_dict['btagSFb_correlated'] = rl.NuisanceParameter(f'CMS_btagSFb_correlated_{year}', 'lnN')
+    sys_dict['btagSFc_correlated'] = rl.NuisanceParameter(f'CMS_btagSFc_correlated_{year}', 'lnN')
+    sys_dict['btagSFlight_correlated'] = rl.NuisanceParameter(f'CMS_btagSFlight_correlated_{year}', 'lnN')
 
     exp_systs = [
         'pileup', 
@@ -248,7 +251,8 @@ def ggfvbf_rhalphabet(args):
         f'btagSFlight_{year}'
         'btagSFb_correlated',
         'btagSFc_correlated',
-        'btagSFlight_correlated'
+        'btagSFlight_correlated',
+        'MuonPTScale', 'MuonPTRes'
     ]
 
     pdf_Higgs_ggF = rl.NuisanceParameter('pdf_Higgs_ggF','lnN')

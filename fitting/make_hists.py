@@ -93,13 +93,6 @@ def main(args):
     path_to_dir = f"/eos/uscms/store/group/lpchbbrun3/skims/{tag}"
     
     samples_qq = ['Wjets','Zjets','EWKW','EWKZ','EWKV']
-
-    jerc_variations = [
-        None,
-        "JES",
-        "JER",
-        "UES",
-    ]
     
     columns = [
         "weight",
@@ -110,6 +103,15 @@ def main(args):
         "FatJet0_ParTPXbbXcc",
         "VBFPair_mjj",
         "GenFlavor",
+    ]
+
+    energy_variations = [
+        None,
+        "JES",
+        "JER",
+        "UES",
+        'MuonPTScale',
+        'MuonPTRes'
     ]
 
     systs = [
@@ -181,7 +183,7 @@ def main(args):
         for dataset in datasets:
             for reg, cfg in cats.items():
                 for year, data_dir in data_dirs.items():
-                    for var in jerc_variations:
+                    for var in energy_variations:
 
                         if not var:
                             c_systs_full = systs + [f"{syst}_{year}" for syst in year_systs]
@@ -205,14 +207,14 @@ def main(args):
                                 for syst in c_systs_full:
                                     fill_hists(out_hists, events, reg, cfg, obs_cfg, (process in samples_qq), f"{syst}", var)
 
-                        else:   #jerc variations
+                        else:   #energy variations
                             for direction in ["Up", "Down"]:
                                 var_jerc = f"{var}{direction}"
 
                                 events = utils.load_samples(
                                     data_dir,
                                     {process: [dataset]},
-                                    columns=columns,    #jerc variations only need base columns
+                                    columns=columns,
                                     region=cfg["name"],
                                     filters=filters,
                                     variation=var_jerc
