@@ -25,7 +25,9 @@ from hbb.corrections import (
     lumiMasks,
     correct_met,
     apply_jerc,
-    add_btag_weights
+    add_btag_weights,
+    add_muon_weights,
+    add_photon_weights
 )
 from hbb.processors.SkimmerABC import SkimmerABC
 
@@ -127,7 +129,7 @@ class categorizer(SkimmerABC):
         if not self._save_skim:
             return {"nominal": self.process_shift(events, "nominal")}
 
-        jerc_variations = ["nominal"]# + [f"{var}_{dir}" for var in variation_map for dir in ["Up", "Down"]]
+        jerc_variations = ["nominal"] + [f"{var}_{dir}" for var in variation_map for dir in ["Up", "Down"]]
         return {var: self.process_shift(events, var) for var in jerc_variations}
     
 
@@ -136,7 +138,9 @@ class categorizer(SkimmerABC):
         weights,
         events,
         dataset,
-        btag_jets
+        btag_jets,
+        muons = None,
+        photons = None
     ) -> tuple[dict, dict]:
         """Adds weights and variations, saves totals for all norm preserving weights and variations"""
         weights.add("genweight", events.genWeight)
@@ -152,6 +156,11 @@ class categorizer(SkimmerABC):
         add_pdf_weight(weights, getattr(events, "LHEPdfWeight", None) if flag_syst else None)
         add_scalevar_7pt(weights, getattr(events, "LHEScaleWeight", None) if flag_syst else None)
         add_scalevar_3pt(weights, getattr(events, "LHEScaleWeight", None) if flag_syst else None)
+
+        if muons is not None:
+            add_muon_weights(weights, self._year, muons)
+        if photons is not None:
+            add_photon_weights(weights, self._year, photons)
 
         logger.debug("weights", extra=weights._weights.keys())
         # logger.debug(f"Weight statistics: {weights.weightStatistics!r}")
@@ -188,6 +197,8 @@ class categorizer(SkimmerABC):
         selection = PackedSelection()
         output = self.make_output() if not self._btag_eff else self.make_btag_output()
         weights = Weights(None, storeIndividual=True)
+        weights_mu = Weights(None, storeIndividual=True)
+        weights_gamma = Weights(None, storeIndividual=True)
         if shift_name == "nominal" and not isRealData and not self._btag_eff:
             output["sumw"][dataset] = ak.sum(events.genWeight)
 
@@ -319,10 +330,6 @@ class categorizer(SkimmerABC):
             "ak4btagMedium08",
             ak.max(getattr(ak4_outside_ak8, self._btagger), axis=1, mask_identity=False) > self._btag_cut,
         )
-        selection.add(
-            "allgoodak4btagMedium",
-            ak.max(getattr(goodjets, self._btagger), axis=1, mask_identity=False) > self._btag_cut,
-        )
 
         selection.add("lowmet", met.pt < 140.0)
 
@@ -347,6 +354,8 @@ class categorizer(SkimmerABC):
         goodmuon = good_muons(events.Muon)
         nmuons = ak.num(goodmuon, axis=1)
         leadingmuon = ak.firsts(goodmuon)
+        ttbarmuon = ak.firsts(goodmuon[goodmuon.pt > 55.])
+            #low pt muons break sf (lower bound 15GeV)
 
         goodelectron = good_electrons(events.Electron)
         nelectrons = ak.num(goodelectron, axis=1)
@@ -360,6 +369,9 @@ class categorizer(SkimmerABC):
         nphotons = ak.num(goodphotons, axis=1)
         leadingphoton = ak.firsts(goodphotons)
         ntightphotons = ak.num(tight_photons(events.Photon), axis=1)
+        vgammaphoton = ak.firsts(tight_photons(events.Photon))
+            #low pt photons break sf (lower bound 20GeV)
+            #TODO confirm selection of this block with Gabi - leading photon still from goodphotons collection?
 
         selection.add("onephoton", (nphotons == 1))
         selection.add("atleastonephoton", (ntightphotons >= 1))
@@ -371,12 +383,30 @@ class categorizer(SkimmerABC):
             genflavor = ak.zeros_like(candidatejet.pt)
             genBosonPt = ak.zeros_like(candidatejet.pt)
         else:
-            weights_dict, totals_temp, btag_SF = self.add_weights(
+            #signal regions
+            weights_dict, totals_temp, btag_SF = self.add_weights( 
                 weights,
                 events,
                 dataset,
-                ak4_opphem_ak8  #TODO solve for differing region selections (mucr + vgamma query different jets)
+                ak4_opphem_ak8 
             )
+            #muon region
+            weights_dict_mu, totals_temp_mu, btag_SF_mu = self.add_weights( 
+                weights_mu,
+                events,
+                dataset,
+                ak4_outside_ak8,
+                muons = ttbarmuon
+            )
+            #gamma region
+            weights_dict_gamma, totals_temp_gamma, btag_SF_gamma = self.add_weights( 
+                weights_gamma,
+                events,
+                dataset,
+                ak4_outside_ak8,
+                photons = vgammaphoton
+            )
+
             for d, gen_func in gen_selection_dict.items():
                 if d in dataset:
                     # match goodfatjets
@@ -451,14 +481,14 @@ class categorizer(SkimmerABC):
                 "muonkin",
                 "muonDphiAK8",
             ],
-            "control-zgamma": [
-                "egammatrigger",
-                "lumimask",
-                "metfilter",
-                "minjetkin_zgamma",
-                "atleastonephoton",
-                "antiak4btagMedium",
-            ],
+            # "control-zgamma": [
+            #     "egammatrigger",
+            #     "lumimask",
+            #     "metfilter",
+            #     "minjetkin_zgamma",
+            #     "atleastonephoton",
+            #     "antiak4btagMedium",
+            # ],
         }
 
         btag_eff_cuts = [
@@ -678,24 +708,37 @@ class categorizer(SkimmerABC):
                     val=self.normalize(btag_SF, cut)
                 )
 
-        if shift_name == "nominal":
-            for region in regions:
-                if self._save_skim:
+        if self._save_skim:
+            if shift_name == "nominal":
+                for region in regions:
                     if region == "signal-all":
                         skim(region, ak.zip({**output_array, **output_array_extra}, depth_limit=1))
                     else:
                         if isRealData:
                             skim(region, ak.zip(output_array, depth_limit=1))
                         else:
-                            skim(region, ak.zip({**output_array, **weights_dict}, depth_limit=1))
-        else:
-            for region in regions:
-                if self._save_skim:
+                            if "signal" in region:
+                                skim(region, ak.zip({**output_array, **weights_dict}, depth_limit=1))
+                            elif region == "control-tt":
+                                output_array["weight"] = ak.ones_like(events.run) if isRealData else weights_dict_mu["weight"]
+                                skim(region, ak.zip({**output_array, **weights_dict_mu}, depth_limit=1))
+                            elif region == "control-zgamma":
+                                output_array["weight"] = ak.ones_like(events.run) if isRealData else weights_dict_gamma["weight"]
+                                skim(region, ak.zip({**output_array, **weights_dict_gamma}, depth_limit=1))
+            else:
+                for region in regions:
                     if region != "signal-all":
                         if isRealData:
                             skim(region, ak.zip(jerc_var_array, depth_limit=1))
                         else:
-                            skim(region, ak.zip({**jerc_var_array, **weights_dict}, depth_limit=1))
+                            if "signal" in region:
+                                skim(region, ak.zip({**jerc_var_array, **weights_dict}, depth_limit=1))
+                            elif region == "control-tt":
+                                output_array["weight"] = ak.ones_like(events.run) if isRealData else weights_dict_mu["weight"]
+                                skim(region, ak.zip({**jerc_var_array, **weights_dict_mu}, depth_limit=1))
+                            elif region == "control-zgamma":
+                                output_array["weight"] = ak.ones_like(events.run) if isRealData else weights_dict_gamma["weight"]
+                                skim(region, ak.zip({**jerc_var_array, **weights_dict_gamma}, depth_limit=1))
 
         toc = time.time()
         output["filltime"] = toc - tic

@@ -43,6 +43,7 @@ pog_correction_path = "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration/
 pog_jsons = {
     "muon": ["MUO", "muon_Z.json.gz"],
     "electron": ["EGM", "electron.json.gz"],
+    "photon": ["EGM", "photon.json.gz"],
     "pileup": ["LUM", "puWeights.json.gz"],
     "fatjet_jec": ["JME", "fatJet_jerc.json.gz"],
     "jet_jec": ["JME", "jet_jerc.json.gz"],
@@ -416,3 +417,46 @@ def add_btag_weights(weights, jets, btagger, wp, year, dataset):
         weightDown=calc_weight(eff_c, get_sf(jets_c, "comb", "down_correlated"), pass_c),
     )
     return nominal
+
+def add_muon_weights(weights, year, muons):
+
+    id_key = "NUM_LooseID_DEN_TrackerMuons"
+    iso_key = "NUM_LoosePFIso_DEN_LooseID"
+    #TODO add trigger SFs
+    
+    cset = correctionlib.CorrectionSet.from_file(get_pog_json("muon", year))
+
+    id_nom = cset[id_key].evaluate(abs(muons.eta), muons.pt, "nominal")
+    id_up = cset[id_key].evaluate(abs(muons.eta), muons.pt, "systup")
+    id_down = cset[id_key].evaluate(abs(muons.eta), muons.pt, "systdown")
+
+    iso_nom = cset[iso_key].evaluate(abs(muons.eta), muons.pt, "nominal")
+    iso_up = cset[iso_key].evaluate(abs(muons.eta), muons.pt, "systup")
+    iso_down = cset[iso_key].evaluate(abs(muons.eta), muons.pt, "systdown")
+
+    weights.add("muon_ID", id_nom, id_up, id_down)
+    weights.add("muon_ISO", iso_nom, iso_up, iso_down)
+    
+    return
+
+def add_photon_weights(weights, year, photons):
+
+    id_key = "Photon-ID-SF"
+
+    year_map = {
+        "2022" : "2022Re-recoBCD",
+        "2022EE" : "2022Re-recoE+PromptFG",
+        "2023" : "2023PromptC",
+        "2023BPix" : "2023PromptD",
+        # "2024"    #TODO double check
+    }
+
+    cset = correctionlib.CorrectionSet.from_file(get_pog_json("photon", year))
+
+    id_nom = cset[id_key].evaluate(year_map[year], "sf", "Tight", photons.eta, photons.pt)
+    id_up = cset[id_key].evaluate(year_map[year], "sfup", "Tight", photons.eta, photons.pt)
+    id_down = cset[id_key].evaluate(year_map[year], "sfdown", "Tight", photons.eta, photons.pt)
+
+    weights.add("photon_ID", id_nom, id_up, id_down)
+
+    return
