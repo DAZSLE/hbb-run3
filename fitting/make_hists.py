@@ -125,11 +125,17 @@ def main(args):
         'btagSFc_correlated',
         'btagSFlight_correlated'
     ]
+
     year_systs = [
         'btagSFb',
         'btagSFc',
         'btagSFlight',
     ]
+
+    cr_systs = {
+        "mucr" : ["muon_ID", "muon_ISO"],
+        "zgcr" : ["photon_ID"]
+    }
 
     data_dirs = {year: Path(path_to_dir) / year}
     if args.year == "Run3":
@@ -179,6 +185,7 @@ def main(args):
 
                         if not var:
                             c_systs_full = systs + [f"{syst}_{year}" for syst in year_systs]
+                            c_systs_full = c_systs_full + cr_systs[reg] if reg in cr_systs else c_systs_full
                             c_systs_full = [f"{syst}{dir}" for syst in c_systs_full for dir in ["Up", "Down"]]
                             events = utils.load_samples(
                                 data_dir,
