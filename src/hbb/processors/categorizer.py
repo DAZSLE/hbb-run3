@@ -397,8 +397,6 @@ class categorizer(SkimmerABC):
         leadingphoton = ak.firsts(goodphotons)
         ntightphotons = ak.num(tight_photons(events.Photon), axis=1)
         vgammaphoton = ak.firsts(tight_photons(events.Photon))
-            #low pt photons break sf (lower bound 20GeV)
-            #TODO confirm selection of this block with Gabi - leading photon still from goodphotons collection?
 
         selection.add("onephoton", (nphotons == 1))
         selection.add("atleastonephoton", (ntightphotons >= 1))
@@ -586,9 +584,9 @@ class categorizer(SkimmerABC):
                 "FatJet1_pnetTXgg": subleadingjet.particleNet_XggVsQCD,
                 "VBFPair_mjj": vbf_mjj,
                 "VBFPair_deta": vbf_deta,
-                "Photon0_pt": leadingphoton.pt,
-                "Photon0_phi": leadingphoton.phi,
-                "Photon0_eta": leadingphoton.eta,
+                "Photon0_pt": vgammaphoton.pt,
+                "Photon0_phi": vgammaphoton.phi,
+                "Photon0_eta": vgammaphoton.eta,
                 "MET": met.pt,
                 "weight": nominal_weight,
                 "genWeight": gen_weight,

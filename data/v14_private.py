@@ -16,7 +16,7 @@ def get_datasets():  ## PRIVATE production with GloParTv2
             },
             "EGamma": {
                 "EGamma_Run2022C": "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2022/EGamma/Run2022C-22Sep2023-v1_DAZSLE_PFNano",
-                "EGamma_Run2022D": "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2022/EGamma/Run2022C-22Sep2023-v1_DAZSLE_PFNano",
+                "EGamma_Run2022D": "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2022/EGamma/Run2022D-22Sep2023-v1_DAZSLE_PFNano",
             },
             "TTGamma": {
                 "TTG-1Jets_PTG-10to100": "/store/group/lpcpfnano/PFNano_Run3/25v2/lzygala/mc_2022/TTG-1Jets_PTG-10to100_TuneCP5_13p6TeV_amcatnloFXFXold-pythia8",
