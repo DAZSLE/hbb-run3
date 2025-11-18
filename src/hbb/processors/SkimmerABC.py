@@ -49,6 +49,11 @@ class SkimmerABC(processor.ProcessorABC):
         return weight_norm
 
     def normalize(self, val, cut):
+        """
+        Fills dak.array nones with nan and applies selection cut
+        Used for filling hist.Hist, 
+        where the events with nones in the object collections throw errors on fill during compute
+        """
         if cut is None:
             ar = ak.fill_none(val, np.nan)
             return ar

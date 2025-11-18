@@ -127,6 +127,8 @@ def run(year: str, fileset: dict, args: argparse.Namespace):
             if os.path.isdir(full_path):
                 jer_vars.append(entry)
         
+        #compile parquet files from each jer_var/region/ directory
+        #save as {jer_var}_{region_name}.parquet for easy transfer
         for local_var in jer_vars:
             # only find subfolders with parquet files
             parquet_folders = set()
@@ -140,7 +142,7 @@ def run(year: str, fileset: dict, args: argparse.Namespace):
                 pddf = pd.read_parquet(folder)
 
                 table = pa.Table.from_pandas(pddf)
-                # This saves the combined file as {region_name}.parquet locally
+                # This saves the combined file as {local_var}_{region_name}.parquet locally
                 output_file = f"{local_dir}/{local_var}_{region_name}.parquet"
                 pq.write_table(table, output_file)
                 print("Saved parquet file to ", output_file)

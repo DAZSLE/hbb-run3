@@ -119,7 +119,10 @@ def add_pileup_weight(weights: Weights, year: str, nPU):
 
     weights.add("pileup", values["nominal"], values["up"], values["down"])
 
-def add_pdf_weight(weights, pdf_weights):
+def add_pdf_weight(weights: Weights, pdf_weights):
+    """
+    Apply pdf weight variation for standard Hessian set
+    """
 
     nom = ak.ones_like(weights.weight())
     if pdf_weights is None:
@@ -141,7 +144,7 @@ def add_pdf_weight(weights, pdf_weights):
     pdfas_unc = np.sqrt( np.square(pdf_unc) + np.square(as_unc) )
     weights.add('PDFaS_weight', nom, pdfas_unc + nom) 
 
-def add_ps_weight(weights, ps_weights):
+def add_ps_weight(weights: Weights, ps_weights):
     """
     Parton Shower Weights (FSR and ISR)
     """
@@ -165,8 +168,12 @@ def add_ps_weight(weights, ps_weights):
     weights.add("ISRPartonShower", nom, up_isr, down_isr)
     weights.add("FSRPartonShower", nom, up_fsr, down_fsr)
 
-def add_scalevar_7pt(weights, var_weights):
-
+def add_scalevar_7pt(weights: Weights, var_weights):
+    """
+    QCD scale variations for the case muF = muR
+    For application to high pt ggf and ttH higgs production mc
+    Recommendation by LHCXSWG cds.cern.ch/record/2669113
+    """
     nom   = ak.ones_like(weights.weight())
     up    = ak.ones_like(nom)
     down  = ak.ones_like(nom)
@@ -184,8 +191,12 @@ def add_scalevar_7pt(weights, var_weights):
 
     weights.add('scalevar_7pt', nom, up, down)
 
-def add_scalevar_3pt(weights,var_weights):
-
+def add_scalevar_3pt(weights: Weights, var_weights):
+    """
+    QCD scale variations for the case muF^2 = muR^2
+    For application to high pt VBF and VH higgs production mc
+    Recommendation by LHCXSWG cds.cern.ch/record/2669113
+    """
     nom   = ak.ones_like(weights.weight())
     up    = ak.ones_like(nom)
     down  = ak.ones_like(nom)
@@ -237,6 +248,11 @@ def get_jetveto_event(jets: JetArray, year: str):
     return event_sel
 
 def correct_jetid(jets, jet_type: str, year: str):
+    """
+    Apply jetid correction for v14+
+    https://twiki.cern.ch/twiki/bin/view/CMS/JetID13p6TeV#nanoAOD_Flags
+    https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/199ba071f68176a815615651f8a5ae939ef0793e/examples/jetidExample.py
+    """
     evaluator = correctionlib.CorrectionSet.from_file(get_pog_json("jetid", year))
 
     if jet_type == "AK8":
@@ -285,6 +301,7 @@ jec_name_map = {
 }
 
 def apply_jerc(jets, jet_type: str, year: str, runkey: str):
+    #Create CorrectedJetFactory and apply jercs+variations to JetArray or FatJetArray
 
     jerc_path =f"{package_path}/hbb/data/jerc"
     jec_path = f"{jerc_path}/{jec_eras[runkey]}"
@@ -318,7 +335,8 @@ def apply_jerc(jets, jet_type: str, year: str, runkey: str):
     corrected_jets = jet_factory.build(jets)
     return corrected_jets
 
-def correct_met(met, jets):
+def correct_met(met, jets: JetArray):
+    #Create CorrectedMETFactory and recluster met
 
     dX_up = met.ptUnclusteredUp * np.cos(met.phiUnclusteredUp)
     dY_up = met.ptUnclusteredUp * np.sin(met.phiUnclusteredUp)
@@ -332,7 +350,12 @@ def correct_met(met, jets):
 
     return corrected_met
 
-def add_btag_weights(weights, jets, btagger, wp, year, dataset):
+def add_btag_weights(weights: Weights, jets: JetArray, btagger: str, wp: str, year: str, dataset: str):
+    """
+    Apply btag event scale factor for AK4 jets queried
+    Using BTV fixed WP recommendations
+    https://btv-wiki.docs.cern.ch/PerformanceCalibration/fixedWPSFRecommendations/
+    """
     if "PNet" in btagger:
         sys_name = "particleNet"
     elif "RobustParT" in btagger:
@@ -419,8 +442,14 @@ def add_btag_weights(weights, jets, btagger, wp, year, dataset):
     )
     return nominal
 
-def add_muon_weights(weights, year, muons, pt_type):
+def add_muon_weights(weights: Weights, year: str, muons, pt_type: str):
+    """
+    Corrections for medium pt GeV muons
+    https://muon-wiki.docs.cern.ch/guidelines/corrections/#medium-pt-30-gev-pt-200-gev
 
+    Run 3 HLT Repo:
+    https://gitlab.cern.ch/cms-muonPOG/muonefficiencies/-/tree/master/Run3
+    """
     id_key = "NUM_LooseID_DEN_TrackerMuons"
     iso_key = "NUM_LoosePFIso_DEN_LooseID"
     #TODO add trigger SFs
@@ -440,8 +469,11 @@ def add_muon_weights(weights, year, muons, pt_type):
     
     return
 
-def add_photon_weights(weights, year, photons):
-
+def add_photon_weights(weights: Weights, year: str, photons):
+    """
+    Corrections for tight ID photons
+    https://twiki.cern.ch/twiki/bin/view/CMS/EgammSFandSSRun3
+    """
     id_key = "Photon-ID-SF"
 
     year_map = {
@@ -467,8 +499,13 @@ mupt_variations = {
     "MuonPTRes" : "ptcorr_resol"
 }
 
-def correct_muons(muons, events, year, isRealData):
-
+def correct_muons(muons, events, year: str, isRealData: bool):
+    """
+    Central corrections maintained by MUON POG
+    https://muon-wiki.docs.cern.ch/guidelines/corrections/#medium-pt-scale-and-resolution
+    https://gitlab.cern.ch/cms-muonPOG/muonscarekit
+    src/hbb/MuonScaRe.py refactored to work with dask+awkward by Lara
+    """
     c_file =f"{package_path}/hbb/data/mupt/{years[year]}.json"
     cset = correctionlib.CorrectionSet.from_file(c_file)
 

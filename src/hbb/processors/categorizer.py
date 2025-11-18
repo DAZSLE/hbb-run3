@@ -120,6 +120,8 @@ class categorizer(SkimmerABC):
             "skim": {},
         }
 
+        #btag efficiency plots - binning according to:
+        #https://btv-wiki.docs.cern.ch/PerformanceCalibration/fixedWPSFRecommendations/#b-tagging-efficiencies-in-simulation
         self.make_btag_output = lambda: (
             Hist.new.StrCat([], growth=True, name="tagger", label="Tagger")
             .Reg(2, 0, 2, name="passWP", label="passWP")
@@ -129,13 +131,26 @@ class categorizer(SkimmerABC):
         )
 
     def process(self, events):
+
+        #process only nominal case
         if not self._save_skim:
             return {"nominal": self.process_shift(events, "nominal")}
 
+        """
+        Add `Up and Down` to total list of energy variations 
+        Muon Energy: `MuonPTScale and MuonPTResolution` defined in mupt_variations
+        Jet Energy: `JES, JER, UES` defined in jerc_variations
+        """
         total_variations = ["nominal"] + \
             [f"{var}_{dir}" for var in jerc_variations for dir in ["Up", "Down"]] + \
             [f"{var}_{dir}" for var in mupt_variations for dir in ["Up", "Down"]]
+
+        """
+        run processor for each shift defined in total_variations
+        return output as dict {variation: output}
+        """
         return {var: self.process_shift(events, var) for var in total_variations}
+        
     
 
     def add_weights(
@@ -261,10 +276,12 @@ class categorizer(SkimmerABC):
                 behavior=fatjets.behavior
             )
         
+        #Apply jerc corrections to jets, fatjets, and met collections
         jets = apply_jerc(jets, "AK4", self._year, jec_key)
         fatjets = apply_jerc(fatjets, "AK8", self._year, jec_key)
         met = correct_met(events.PuppiMET, jets)  # PuppiMET Recommended for Run3
 
+        #Select jets, fatjets, and met collections according to jerc variation shift
         if not shift_name == "nominal" and not "Muon" in shift_name:
             var, direction = shift_name.split("_")
             attr = jerc_variations[var]
@@ -579,6 +596,7 @@ class categorizer(SkimmerABC):
                 **egamma_trigger_booleans,
             }
 
+            #reduced output array for energy variation shift
             energy_var_array = {
                 "GenBoson_pt": genBosonPt,
                 "GenFlavor": genflavor,
@@ -735,7 +753,8 @@ class categorizer(SkimmerABC):
                             elif region == "control-zgamma":
                                 output_array["weight"] = ak.ones_like(events.run) if isRealData else weights_dict_gamma["weight"]
                                 skim(region, ak.zip({**output_array, **weights_dict_gamma}, depth_limit=1))
-            else:
+                                
+            else:   #energy variation shift case
                 for region in regions:
                     if region != "signal-all":
                         if isRealData:
