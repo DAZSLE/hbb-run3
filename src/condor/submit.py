@@ -16,7 +16,8 @@ from string import Template
 from hbb import run_utils
 
 t2_redirectors = {
-    "lpc": "root://cmseos.fnal.gov//",
+    # "lpc": "root://cmseos.fnal.gov//",
+    "lpc": "root://cmseos.fnal.gov//eos/uscms/",
 }
 
 
@@ -55,7 +56,7 @@ def main(args):
     tag = f"{args.tag}_{args.nano_version}"
 
     # make eos dir
-    pdir = Path(f"store/user/lpchbbrun3/{username}/")
+    pdir = Path(f"store/group/lpchbbrun3/{username}/")
     outdir = pdir / tag
 
     # make local directory
@@ -109,7 +110,7 @@ def main(args):
                     "jobnum": j,
                     "nano_version": args.nano_version,
                     "run_mode": args.run_mode,
-                    "BDT": args.BDT
+                    "BDT": args.BDT,
                 }
                 write_template(sh_templ, localsh, sh_args)
                 os.system(f"chmod u+x {localsh}")
