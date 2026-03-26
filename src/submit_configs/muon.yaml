@@ -14,5 +14,9 @@
   "2023BPix": {
     "Muon": { "files_per_job": 10, },
     "VJets_lep_NLO": { "files_per_job": 10, },
+  },
+  "2024": {
+    "Muon": { "files_per_job": 10 },
+    "VJets_lep_NLO": { "files_per_job": 10 }
   }
 }
