@@ -16,8 +16,7 @@ from string import Template
 from hbb import run_utils
 
 t2_redirectors = {
-    # "lpc": "root://cmseos.fnal.gov//",
-    "lpc": "root://cmseos.fnal.gov//eos/uscms/",
+    "lpc": "root://cmseos.fnal.gov//",
 }
 
 
@@ -33,7 +32,7 @@ def write_template(templ_file: str, out_file: str, templ_args: dict):
 
 def main(args):
     # check that branch exists
-    run_utils.check_branch(args.git_branch, args.allow_diff_local_repo)
+    # run_utils.check_branch(args.git_branch, args.allow_diff_local_repo)
 
     if args.site == "lpc":
         try:
