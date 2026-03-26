@@ -124,7 +124,7 @@ xsecs["Zto2Q-4Jets_HT-400to600"] = 124.1
 xsecs["Zto2Q-4Jets_HT-600to800"] = 27.28
 xsecs["Zto2Q-4Jets_HT-800"] = 14.57
 
-#LO v15 binning - From Zichun running genZSecAnalyzer
+# LO v15 binning - From Zichun running genZSecAnalyzer
 xsecs["Wto2Q-3Jets_Bin-HT-100to400"] = 16120
 xsecs["Wto2Q-3Jets_Bin-HT-400to800"] = 354.2
 xsecs["Wto2Q-3Jets_Bin-HT-800to1500"] = 29.6
@@ -169,7 +169,7 @@ xsecs["Zto2Nu-4Jets_HT-200to400"] = 75.96
 xsecs["Zto2Nu-4Jets_HT-400to800"] = 13.19
 xsecs["Zto2Nu-4Jets_HT-800to1500"] = 1.364
 
-#NLO v15 - From Zichun running genZSecAnalyzer
+# NLO v15 - From Zichun running genZSecAnalyzer
 xsecs["Wto2Q-2Jets_Bin-PTQQ-100"] = 1751.0
 xsecs["Wto2Q-2Jets_Bin-PTQQ-200"] = 164.3
 xsecs["Wto2Q-2Jets_Bin-PTQQ-400"] = 9.205
@@ -185,17 +185,40 @@ xsecs["WtoLNu-2Jets_0J"] = 55760.0
 xsecs["WtoLNu-2Jets_1J"] = 9529.0
 xsecs["WtoLNu-2Jets_2J"] = 3532.0
 
-xsecs["DYto2L-2Jets_MLL-50-PTLL-40to100_1J"] = 475.3
-xsecs["DYto2L-2Jets_MLL-50-PTLL-100to200_1J"] = 45.42
-xsecs["DYto2L-2Jets_MLL-50-PTLL-200to400_1J"] = 3.382
-xsecs["DYto2L-2Jets_MLL-50-PTLL-400to600_1J"] = 0.1162
-xsecs["DYto2L-2Jets_MLL-50-PTLL-600_1J"] = 0.01392
+xsecs["DYto2L-2Jets_MLL-50_PTLL-40to100_1J"] = 475.3
+xsecs["DYto2L-2Jets_MLL-50_PTLL-100to200_1J"] = 45.42
+xsecs["DYto2L-2Jets_MLL-50_PTLL-200to400_1J"] = 3.382
+xsecs["DYto2L-2Jets_MLL-50_PTLL-400to600_1J"] = 0.1162
+xsecs["DYto2L-2Jets_MLL-50_PTLL-600_1J"] = 0.01392
 
-xsecs["DYto2L-2Jets_MLL-50-PTLL-40to100_2J"] = 179.3
-xsecs["DYto2L-2Jets_MLL-50-PTLL-100to200_2J"] = 51.68
-xsecs["DYto2L-2Jets_MLL-50-PTLL-200to400_2J"] = 7.159
-xsecs["DYto2L-2Jets_MLL-50-PTLL-400to600_2J"] = 0.4157
-xsecs["DYto2L-2Jets_MLL-50-PTLL-600_2J"] = 0.07019
+xsecs["DYto2L-2Jets_MLL-50_PTLL-40to100_2J"] = 179.3
+xsecs["DYto2L-2Jets_MLL-50_PTLL-100to200_2J"] = 51.68
+xsecs["DYto2L-2Jets_MLL-50_PTLL-200to400_2J"] = 7.159
+xsecs["DYto2L-2Jets_MLL-50_PTLL-400to600_2J"] = 0.4157
+xsecs["DYto2L-2Jets_MLL-50_PTLL-600_2J"] = 0.07019
+
+# VGammaLep - 2024 (DYG + WGtoLNuG new binning) - xsecs TODO: get from McM
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-100"] = 0  # TODO
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-200"] = 0  # TODO
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-400"] = 0  # TODO
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-600"] = 0  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-100"] = 0  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-200"] = 0  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-400"] = 0  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-600"] = 0  # TODO
+xsecs["WGtoLNuG-1Jets"] = 0  # TODO
+
+# VGammaHad - 2024 (ZGto2QG + WGto2QG new binning) - xsecs TODO: get from McM
+xsecs["ZGto2QG-1Jets_Bin-PTG-100"] = 0  # TODO
+xsecs["ZGto2QG-1Jets_Bin-PTG-200"] = 0  # TODO
+xsecs["ZGto2QG-1Jets_Bin-PTG-400"] = 0  # TODO
+xsecs["ZGto2QG-1Jets_Bin-PTG-600"] = 0  # TODO
+xsecs["ZGto2QG-1Jets"] = 0  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-100"] = 0  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-200"] = 0  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-400"] = 0  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-600"] = 0  # TODO
+xsecs["WGto2QG-1Jets"] = 0  # TODO
 
 # LO
 xsecs["WtoLNu-4Jets"] = 55390.0

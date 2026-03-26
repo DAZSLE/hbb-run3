@@ -281,11 +281,20 @@ def get_datasets():
                 #    for qbin in ["100to200", "200to400", "400to600", "600"]
                 # },
             },
-            "VGamma": {  # DYG (Z->ll + gamma) - for Z(mumu) control region
+            "VGammaLep": {
+                # DYG (Z->ll + gamma) - for Z(mumu) control region
                 "DYGto2LG-1Jets_Bin-MLL-50-PTG-100": "/DYGto2LG-1Jets_Bin-MLL-50-PTG-100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
                 "DYGto2LG-1Jets_Bin-MLL-50-PTG-200": "/DYGto2LG-1Jets_Bin-MLL-50-PTG-200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
                 "DYGto2LG-1Jets_Bin-MLL-50-PTG-400": "/DYGto2LG-1Jets_Bin-MLL-50-PTG-400_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
                 "DYGto2LG-1Jets_Bin-MLL-50-PTG-600": "/DYGto2LG-1Jets_Bin-MLL-50-PTG-600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
+                # WGtoLNuG
+                "WGtoLNuG-1Jets_Bin-PTG-100": "/WGtoLNuG-1Jets_Bin-PTG-100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
+                "WGtoLNuG-1Jets_Bin-PTG-200": "/WGtoLNuG-1Jets_Bin-PTG-200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
+                "WGtoLNuG-1Jets_Bin-PTG-400": "/WGtoLNuG-1Jets_Bin-PTG-400_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
+                "WGtoLNuG-1Jets_Bin-PTG-600": "/WGtoLNuG-1Jets_Bin-PTG-600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
+                "WGtoLNuG-1Jets": "/WGtoLNuG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
+            },
+            "VGammaHad": {
                 # ZGto2QG
                 "ZGto2QG-1Jets_Bin-PTG-100": "/ZGto2QG-1Jets_Bin-PTG-100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
                 "ZGto2QG-1Jets_Bin-PTG-200": "/ZGto2QG-1Jets_Bin-PTG-200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
@@ -298,12 +307,6 @@ def get_datasets():
                 "WGto2QG-1Jets_Bin-PTG-400": "/WGto2QG-1Jets_Bin-PTG-400_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
                 "WGto2QG-1Jets_Bin-PTG-600": "/WGto2QG-1Jets_Bin-PTG-600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
                 "WGto2QG-1Jets": "/WGto2QG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
-                # WGtoLNuG
-                "WGtoLNuG-1Jets_Bin-PTG-100": "/WGtoLNuG-1Jets_Bin-PTG-100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
-                "WGtoLNuG-1Jets_Bin-PTG-200": "/WGtoLNuG-1Jets_Bin-PTG-200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
-                "WGtoLNuG-1Jets_Bin-PTG-400": "/WGtoLNuG-1Jets_Bin-PTG-400_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
-                "WGtoLNuG-1Jets_Bin-PTG-600": "/WGtoLNuG-1Jets_Bin-PTG-600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
-                "WGtoLNuG-1Jets": "/WGtoLNuG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",
             },
             "EWKV": {
                 "VBFZto2Q": "/VBFZto2Q_TuneCP5_13p6TeV_madgraph-pythia8/RunIII2024Summer24NanoAODv15-150X_mcRun3_2024_realistic_v2-v2/NANOAODSIM",

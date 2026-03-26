@@ -25,7 +25,8 @@
   },
   "2024": {
     "EGamma": { "files_per_job": 10 },
-    "VGamma": { "files_per_job": 15 },
+    "VGammaHad": { "files_per_job": 15 },
+    "VGammaLep": { "files_per_job": 15 },
     "GJets": { "files_per_job": 10 }
   }
 }
