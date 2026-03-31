@@ -198,27 +198,27 @@ xsecs["DYto2L-2Jets_MLL-50_PTLL-400to600_2J"] = 0.4157
 xsecs["DYto2L-2Jets_MLL-50_PTLL-600_2J"] = 0.07019
 
 # VGammaLep - 2024 (DYG + WGtoLNuG new binning) - xsecs TODO: get from McM
-xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-100"] = 0  # TODO
-xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-200"] = 0  # TODO
-xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-400"] = 0  # TODO
-xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-600"] = 0  # TODO
-xsecs["WGtoLNuG-1Jets_Bin-PTG-100"] = 0  # TODO
-xsecs["WGtoLNuG-1Jets_Bin-PTG-200"] = 0  # TODO
-xsecs["WGtoLNuG-1Jets_Bin-PTG-400"] = 0  # TODO
-xsecs["WGtoLNuG-1Jets_Bin-PTG-600"] = 0  # TODO
-xsecs["WGtoLNuG-1Jets"] = 0  # TODO
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-100"] = 0.3942  # TODO
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-200"] = 0.04738  # TODO
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-400"] = 0.003741  # TODO
+xsecs["DYGto2LG-1Jets_Bin-MLL-50-PTG-600"] = 0.0006443  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-100"] = 2.556  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-200"] = 0.3179  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-400"] = 0.02661  # TODO
+xsecs["WGtoLNuG-1Jets_Bin-PTG-600"] = 0.004734  # TODO
+xsecs["WGtoLNuG-1Jets"] = 671.5  # TODO
 
 # VGammaHad - 2024 (ZGto2QG + WGto2QG new binning) - xsecs TODO: get from McM
-xsecs["ZGto2QG-1Jets_Bin-PTG-100"] = 0  # TODO
-xsecs["ZGto2QG-1Jets_Bin-PTG-200"] = 0  # TODO
-xsecs["ZGto2QG-1Jets_Bin-PTG-400"] = 0  # TODO
-xsecs["ZGto2QG-1Jets_Bin-PTG-600"] = 0  # TODO
-xsecs["ZGto2QG-1Jets"] = 0  # TODO
-xsecs["WGto2QG-1Jets_Bin-PTG-100"] = 0  # TODO
-xsecs["WGto2QG-1Jets_Bin-PTG-200"] = 0  # TODO
-xsecs["WGto2QG-1Jets_Bin-PTG-400"] = 0  # TODO
-xsecs["WGto2QG-1Jets_Bin-PTG-600"] = 0  # TODO
-xsecs["WGto2QG-1Jets"] = 0  # TODO
+xsecs["ZGto2QG-1Jets_Bin-PTG-100"] = 2.251  # TODO
+xsecs["ZGto2QG-1Jets_Bin-PTG-200"] = 0.282  # TODO
+xsecs["ZGto2QG-1Jets_Bin-PTG-400"] = 0.0228  # TODO
+xsecs["ZGto2QG-1Jets_Bin-PTG-600"] = 0.003966  # TODO
+xsecs["ZGto2QG-1Jets"] = 141.5  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-100"] = 4.67  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-200"] = 0.6297  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-400"] = 0.0547  # TODO
+xsecs["WGto2QG-1Jets_Bin-PTG-600"] = 0.009761  # TODO
+xsecs["WGto2QG-1Jets"] = 291.2  # TODO
 
 # LO
 xsecs["WtoLNu-4Jets"] = 55390.0
