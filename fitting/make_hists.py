@@ -25,6 +25,7 @@ from hbb import utils
 REGION_MAP = {
     "zgcr": "control-zgamma",
     "mucr": "control-tt",
+    "zmmcr": "control-zmumu",
     "vh": "signal-vh",
     "vbf": "signal-vbf",
     "ggf": "signal-ggf",
@@ -86,21 +87,28 @@ def fill_binned_histogram(
             trigger = data["Photon200"] | data["Photon110EB_TightID_TightIso"]
             topo_cuts = (dphi > 2.2) & (met_pt < 50) & (data["Photon0_pt"] > 120)
             pre_selection = basic_cuts & topo_cuts & trigger & (pt > pt_min)
+        elif "zmumu" in actual_reg_name:
+            # Z(mumu) CR: observable is mll, bin variable is dimuon pair pt
+            basic_cuts = (var_series > obs_min) & (var_series < obs_max)
+            pre_selection = basic_cuts & (bin_data > pt_min)
         else:
             # Lara's Signal Region logic
             pre_selection = basic_cuts & (pt > pt_min)
 
-        Txcc = data["FatJet0_ParTPXccVsQCD"]
-        Txbb = data["FatJet0_ParTPXbbVsQCD"]
-        Txbbxcc = data["FatJet0_ParTPXbbXcc"]
-
-        selection_dict = {
-            "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
-            "pass_cc": pre_selection & (Txbbxcc > working_point) & (Txcc > Txbb),
-            "fail": pre_selection & (Txbbxcc <= working_point),
-            "pass": pre_selection & (Txbbxcc > working_point),
-            "inclusive": pre_selection,
-        }
+        if "zmumu" in actual_reg_name:
+            # Only inclusive category for zmumu CR — no Txbb pass/fail
+            selection_dict = {"inclusive": pre_selection}
+        else:
+            Txcc = data["FatJet0_ParTPXccVsQCD"]
+            Txbb = data["FatJet0_ParTPXbbVsQCD"]
+            Txbbxcc = data["FatJet0_ParTPXbbXcc"]
+            selection_dict = {
+                "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
+                "pass_cc": pre_selection & (Txbbxcc > working_point) & (Txcc > Txbb),
+                "fail": pre_selection & (Txbbxcc <= working_point),
+                "pass": pre_selection & (Txbbxcc > working_point),
+                "inclusive": pre_selection,
+            }
 
         # --- 4. FILLING ---
         for category, selection in selection_dict.items():
@@ -176,6 +184,8 @@ def main(args):
         # Determine Data Stream (e.g., EGammadata for zgamma)
         if "zgamma" in region_to_load:
             data_map_key = "EGammadata"
+        elif "zmumu" in region_to_load:
+            data_map_key = "Muondata"
         elif "tt" in region_to_load:
             data_map_key = "Muondata"
         else:
@@ -307,7 +317,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Unified Histogram Maker for Signal and CR")
-    parser.add_argument("--year", required=True, choices=["2022", "2022EE", "2023", "2023BPix"])
+    parser.add_argument("--year", required=True, choices=["2022", "2022EE", "2023", "2023BPix", "2024"])
     parser.add_argument("--tag", required=True, help="Tag for the skims directory (e.g., 26Feb03)")
     parser.add_argument("--setup", required=True, help="Path to setup.json file")
     parser.add_argument("--outdir", default="results", help="Directory to save ROOT files")

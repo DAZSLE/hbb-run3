@@ -58,7 +58,7 @@ def plot_by_process(
     if not first_hist:
         print(f"All histograms are empty for {category} category. Skipping plot.")
         return
-    pt_axis = first_hist.axes["pt1"]
+    pt_axis = first_hist.axes[1]
 
     if ptinclusive:
         loop_indices = ["inclusive"]
@@ -121,6 +121,10 @@ def plot_by_process(
             signals = ["Zgamma"]
             bkg_order = ["ttbar", "Wjets", "Zjets", "QCD", "Wgamma"]
             onto = "GJets"
+        elif "zmumu" in region or "zmmcr" in region:
+            signals = []
+            bkg_order = ["QCD", "singlet", "VV", "Wjets", "ttbar", "Zjets"]
+            onto = "Zjets"
         elif "control-tt" in region:
             signals = []
             bkg_order = ["Wjets", "Zjets", "QCD", "singlet", "ttbar"]
@@ -181,7 +185,7 @@ def plot_by_flavor(hists, category, year_str, year_list, outdir, region, style, 
     if not first_hist:
         print(f"All histograms are empty for {category} category. Skipping plot.")
         return
-    pt_axis = first_hist.axes["pt1"]
+    pt_axis = first_hist.axes[1]
 
     for i in range(len(pt_axis.edges) - 1):
         pt_low, pt_high = pt_axis.edges[i], pt_axis.edges[i + 1]
@@ -238,6 +242,8 @@ def plot_by_flavor(hists, category, year_str, year_list, outdir, region, style, 
         onto = "QCD"
         if "control-zgamma" in region:
             onto = "GJets"
+        elif "zmumu" in region or "zmmcr" in region:
+            onto = "Zjets"
         elif "control-tt" in region:
             onto = "ttbar"
 
@@ -283,7 +289,7 @@ def plot_qcd_shapes(hists, year_str, outdir, region, norm_type, variable, qcd_pr
         print(f"No '{qcd_proc}' histogram with entries found. Exiting.")
         return
     h_qcd = hists[qcd_proc]
-    pt_axis = h_qcd.axes["pt1"]
+    pt_axis = h_qcd.axes[1]
 
     for i in range(len(pt_axis.edges) - 1):
         pt_low, pt_high = pt_axis.edges[i], pt_axis.edges[i + 1]
@@ -353,7 +359,7 @@ def plot_inclusive(
         return
 
     first_hist = next(iter(hists_incl.values()))
-    pt_axis = first_hist.axes["pt1"]
+    pt_axis = first_hist.axes[1]
     plot_configs = []
 
     if inclusive_scope in ["pt-binned", "all"]:
@@ -413,6 +419,10 @@ def plot_inclusive(
             signals = ["Zgamma"]
             bkg_order = ["ttbar", "Wjets", "Zjets", "QCD", "Wgamma", "GJets"]
             onto = "GJets"
+        elif "zmumu" in region or "zmmcr" in region:
+            signals = []
+            bkg_order = ["QCD", "singlet", "VV", "Wjets", "ttbar", "Zjets"]
+            onto = "Zjets"
         elif "control-tt" in region:
             signals = []
             bkg_order = ["Wjets", "Zjets", "QCD", "singlet", "ttbar"]
@@ -593,7 +603,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         nargs="+",
-        choices=["2022", "2022EE", "2023", "2023BPix"],
+        choices=["2022", "2022EE", "2023", "2023BPix", "2024"],
     )
     parser.add_argument("--indir", help="Input directory for .pkl files", type=str, required=True)
     parser.add_argument("--outdir", help="Output directory for plots", type=str, required=True)
