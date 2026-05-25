@@ -181,7 +181,7 @@ def add_scalevar(gen_weights, var_weights, output, structure = "7pt"):
     try:
         for var in var_map[structure]:
             out_lhe[f"weight_scalevar_{structure}_{var}"] = var_weights[:, var]
-            output["sumw_pdf"][f"sumweight_scalevar_{structure}_{var}"] = ak.sum(var_weights[:, var] * gen_weights)
+            output["sumw_scalevar"][f"sumweight_scalevar_{structure}_{var}"] = ak.sum(var_weights[:, var] * gen_weights)
             
     except Exception as e:
         print("Scale variation structure unexpected:", e)
