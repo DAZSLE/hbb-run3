@@ -252,7 +252,7 @@ class categorizer(SkimmerABC):
         weights.add("genweight", events.genWeight)
 
         if not self._skip_syst:
-            add_pileup_weight(weights, self._year, events.Pileup.nPU)
+            add_pileup_weight(weights, self._year, events.Pileup.nTrueInt)
             add_ps_weight(weights, events.PSWeight)
 
             add_EWHiggs_weight(weights, dataset, events.GenPart)
@@ -337,6 +337,15 @@ class categorizer(SkimmerABC):
         # normalize all the weights to xsec, needs to be divided by totals in Step 2 in post-processing
         for key, val in weights_dict.items():
             weights_dict[key] = val * weight_norm
+
+
+        for weight in include_weights:
+            weights_dict[f"weight_nonorm_{weight.replace(f'REGION{region}_', '')}"] = weights.partial_weight(include=[weight])
+
+        for weight in include_weights:
+            include_copy = include_weights.copy()
+            include_copy.remove(weight)
+            weights_dict[f"weight_nonorm_WITHOUT_{weight.replace(f'REGION{region}_', '')}"] = weights.partial_weight(include=include_copy)
 
         # save the unnormalized weight, to confirm that it's been normalized in post-processing
         weights_dict["weight_noxsec"] = weights.partial_weight(include=include_weights)
