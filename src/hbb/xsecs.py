@@ -91,6 +91,7 @@ xsecs["GluGluHto2B_PT-200_M-125"] = 0.5246 * (43.92 / 27.8) * BR_HBB
 xsecs["GluGluHto2C_PT-200_M-125"] = 0.5247 * (43.92 / 27.8) * BR_HCC
 # https://twiki.cern.ch/twiki/bin/view/LHCPhysics/LHCHWG136TeVxsec_extrap
 xsecs["VBFHto2B_M-125_dipoleRecoilOn"] = 4.078 * BR_HBB  # 2.34
+xsecs["VBFHto2B_M-125"] = 4.078 * BR_HBB  # 2.34
 xsecs["VBFHto2C_M-125"] = 4.078 * BR_HCC  # 2.34
 xsecs["WminusH_Hto2B_Wto2Q_M-125"] = 0.8889 * BR_WQQ * BR_HBB  # 0.349
 xsecs["WminusH_Hto2C_Wto2Q_M-125"] = 0.8889 * BR_WQQ * BR_HCC
