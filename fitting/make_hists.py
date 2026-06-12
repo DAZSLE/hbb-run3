@@ -21,6 +21,9 @@ import uproot
 from hbb import utils
 from template_utils import (
     REGION_MAP,
+    folder_systs,
+    analysis_systs,
+    year_systs,
     get_pdf_list,
     get_scale_list,
     scalevar_process,
@@ -28,11 +31,10 @@ from template_utils import (
     export_to_root,
     set_rootfile,
     accumulate,
-    export_to_pkl
+    export_to_pkl,
+    Zjets_thsysts,
+    Wjets_thsysts
 )
-
-folder_systs = ["JES", "JER", "UES", "MuonPTScale", "MuonPTRes"]
-analysis_systs = ["pdf", "scalevar7pt", "scalevar3pt"]
 
 def fill_binned_histogram(outdict_pkl, outdict_templates,
     events, region_key, setup, args, in_syst="nominal"
@@ -99,12 +101,15 @@ def fill_binned_histogram(outdict_pkl, outdict_templates,
         # --- 3. SELECTION LOGIC ---
         basic_cuts = (var_series > obs["min"]) & (var_series < obs["max"])
 
-        pre_selection = basic_cuts & (pt > pt_min)
+        pre_selection = basic_cuts & (pt > pt_min)  #signal categories
         if "zgcr" in region_key:
             # Specific Z-Gamma logic from Gabi's script
             trigger = data["Photon200"] | data["Photon110EB_TightID_TightIso"]
             topo_cuts = (dphi > 2.2) & (met_pt < 50) & (data["Photon0_pt"] > 120)
             pre_selection = basic_cuts & topo_cuts & trigger & (pt > pt_min)
+        elif "zmmcr" in region_key:
+            # Z(mumu) CR: observable is mll, bin variable is dimuon pair pt
+            pre_selection = basic_cuts & (data[bin_branch] > pt_min)
 
         selection_dict = {
             "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
@@ -113,6 +118,9 @@ def fill_binned_histogram(outdict_pkl, outdict_templates,
             "pass": pre_selection & (Txbbxcc > working_point),
             "inclusive": pre_selection,
         }
+        if "zmmcr" in region_key:
+            # Only inclusive category for zmumu CR — no Txbb pass/fail
+            selection_dict = {"inclusive": pre_selection}
 
         flavor_cuts = {
             "": ((genflavordata == 1) | (genflavordata == 2)),
@@ -123,7 +131,9 @@ def fill_binned_histogram(outdict_pkl, outdict_templates,
 
         # --- 4. FILLING ---
         def fill_h(name, sel):
-            factor = perform_analysis(data, sel, weight_val, in_syst) if is_analysis_syst else np.ones_like(bin_branch[sel])
+            factor = perform_analysis(data, sel, weight_val, in_syst) if is_analysis_syst else np.ones_like(data[bin_branch][sel])
+            if args.debug:
+                print(name, in_syst, is_analysis_syst, len(factor), (factor[0] if len(factor) > 0 else None))
 
             h_rt.view()[:] = 0
             h_rt.fill(
@@ -137,9 +147,9 @@ def fill_binned_histogram(outdict_pkl, outdict_templates,
                 if category in h_pkl.axes["category"]:
 
                     # calculate theory uncertainties based on final region acceptance
-                    # Lara to Gabi : If you are cutting on these plots more in post-processing, then the theory systematics won't be correct
+                    # If you are cutting on these plots more in post-processing, then the theory systematics won't be correct
                     # As they need to be calculated in their final region acceptances here 
-                    factor = perform_analysis(data, selection, weight_val, in_syst) if is_analysis_syst else np.ones_like(bin_branch[selection])
+                    factor = perform_analysis(data, selection, weight_val, in_syst) if is_analysis_syst else np.ones_like(data[bin_branch][selection])
 
                     h_pkl.fill(
                         var_series[selection],
@@ -152,7 +162,7 @@ def fill_binned_histogram(outdict_pkl, outdict_templates,
 
             if args.save_root:
                 for i in range(len(bins_list) - 1):
-                    bin_cut = (bin_branch > bins_list[i]) & (bin_branch < bins_list[i+1]) & pre_selection
+                    bin_cut = (data[bin_branch] > bins_list[i]) & (data[bin_branch] < bins_list[i+1]) & pre_selection
                     base_name = f"{region_key}_{category}_{bin_prefix}{i+1}_{process_name}"
                     splits = flavor_cuts if should_split else {"": None}
 
@@ -193,7 +203,7 @@ def main(args):
             "FatJet0_ParTPXbbVsQCD",
             "FatJet0_ParTPXccVsQCD",
             "FatJet0_ParTPXbbXcc",
-            "GenFlavor",
+            "GenFlavor"
         ]
 
         # Ensure the dynamic bin branch is loaded
@@ -204,6 +214,21 @@ def main(args):
         obs_branch = setup["observable"]["branch_name"]
         if obs_branch not in cols:
             cols.append(obs_branch)
+
+        # ------------------------------------------------------------------
+        # Build loose PyArrow row filters from the setup config.
+        # These are applied at read time (predicate pushdown) — rows that
+        # fail are never loaded into RAM, which is critical for large MC
+        # samples like GJets that have O(100M) events in the parquet.
+        # Use slightly looser cuts than the analysis selection so we don't
+        # accidentally lose events at bin edges.
+        # ------------------------------------------------------------------
+        pq_filters = [
+            ("FatJet0_msd", ">=", float(setup["observable"]["min"])),
+            ("FatJet0_msd", "<=", float(setup["observable"]["max"])),
+            ("FatJet0_pt",  ">=", float(450.)),
+            ("FatJet0_pt",  "<=", float(1200.)),
+        ]
 
         # Determine Data Stream (e.g., EGammadata for zgamma)
         data_map_key = "Jetdata"
@@ -217,17 +242,25 @@ def main(args):
                 "Photon200",
                 "Photon110EB_TightID_TightIso",
             ]
+            # Photon0_pt > 120 is the analysis cut; pre-filter at 100 to
+            # keep a small margin while cutting ~90% of low-pT GJets rows.
+            pq_filters.append(("Photon0_pt", ">=", 100.0))
         elif "mu" in region_key:    #refactor for zmumu
             data_map_key = "Muondata"
 
         do_folder_systs = ["nominal"]
+        col_systs = []
         if setup.get("do_systematics"):
             active_syst = setup.get("active_systematics", [])
-            col_systs = [f"{s}{var}" for s in active_syst if s not in folder_systs for var in ("Up", "Down")]
+            col_systs = [f"{s}{var}" for s in active_syst if s not in folder_systs and s not in ["pdf", "QCDscale", "VJets"] and s not in year_systs for var in ("Up", "Down")]
+            col_systs.extend([f"{s}_{args.year}{var}" for s in active_syst if s in year_systs for var in ("Up", "Down")])
             do_folder_systs = ["nominal"] + [f"{s}{var}" for s in active_syst if s in folder_systs for var in ("Up", "Down")]
 
         for variation in do_folder_systs:
-            print(f"\n>>> Running Energy Variation Systematic Pass: {syst}")
+            if args.debug:
+                if not variation == "nominal":
+                    continue
+            print(f"\n>>> Running Energy Variation Systematic Pass: {variation}")
 
             histograms_pkl, histograms_rt = {}, {}
             for process, datasets in pmap.items():
@@ -235,19 +268,32 @@ def main(args):
                 if isRealData and (process != data_map_key or variation != "nominal"):
                     continue
 
-                col_systs_proc, syst_loop = col_systs, col_systs
-                if setup.get("do_systematics"):
+                col_systs_proc, syst_loop = [], []
+                do_loadsys_sumw = False
+                if setup.get("do_systematics") and not isRealData:
+                    col_systs_proc, syst_loop = col_systs.copy(), col_systs.copy()
                     if process in scalevar_process:
-                        if "pdf" in col_systs:
-                            col_systs_proc.append(get_pdf_list(103))
-                            syst_loop.append(["pdfUp", "pdfDown"])
-                        elif "scalevar" in col_systs:
-                            col_systs_proc.append(get_scale_list(scalevar_process[process]))
-                            syst_loop.append([f"scalevar{scalevar_process[process]}Up", f"scalevar{scalevar_process[process]}Down"])
+                        do_loadsys_sumw = True
+                        if "pdf" in active_syst:
+                            col_systs_proc.extend(get_pdf_list(103))
+                            syst_loop.extend(["pdfUp", "pdfDown"])
+                        if "QCDscale" in active_syst:
+                            col_systs_proc.extend(get_scale_list(scalevar_process[process]))
+                            syst_loop.extend([f"scalevar{scalevar_process[process]}Up", f"scalevar{scalevar_process[process]}Down"])
 
+                    #Our submission files technically only run over vjets files (HadLO + LepNLO) that get corrected, so the pmap should be ok
+                    if "VJets" in active_syst:
+                        if process == "Zjets":
+                            for zsyst in Zjets_thsysts:
+                                col_systs_proc.extend([f"{zsyst}Up", f"{zsyst}Down"])
+                                syst_loop.extend([f"{zsyst}Up", f"{zsyst}Down"])
+                        elif process == "Wjets":
+                            for wsyst in Wjets_thsysts:
+                                col_systs_proc.extend([f"{wsyst}Up", f"{wsyst}Down"] )
+                                syst_loop.extend([f"{wsyst}Up", f"{wsyst}Down"])
 
                 load_cols = cols
-                if variation is not "nominal" and not isRealData:
+                if variation == "nominal" and not isRealData:
                     load_cols = cols+col_systs_proc
                 for dataset in datasets:
                     events = utils.load_samples(
@@ -259,12 +305,18 @@ def main(args):
                         region=REGION_MAP[region_key] if not do_BDT_regions or "cr" in region_key else f"{REGION_MAP[region_key]}-BDT",
                         variation=variation,
                         filters=pq_filters,
+                        load_sys_sumweights=do_loadsys_sumw,
+                        scalevar_structure=scalevar_process[process] if do_loadsys_sumw else "",
+                        year=args.year
                     )
                     if events:
+                        if args.debug:
+                            for process_name, data in events.items():
+                                print(args.year, process_name, len(data), np.sum(data["finalWeight"]))
 
-                        if variation is "nominal":
-                            #Lara: Why would we reload the same exact sample with the same exact columns a dozen different times? 
-                            for syst in ["nominal"] + col_systs:
+                        if variation == "nominal":
+                            #We don't need to reload the same exact sample with the same exact columns a dozen different times 
+                            for syst in ["nominal"] + syst_loop:
                                 histograms_pkl = {}
                             
                                 # Pass the dynamic branch
@@ -313,6 +365,13 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", default="results", help="Directory to save ROOT files")
     parser.add_argument("--save-root", action="store_true", help="Actually write the ROOT file")
     parser.add_argument("--save-pkl", action="store_true", help="Actually write the PKL file")
+    parser.add_argument("--debug", action="store_true", help="Enter debug mode")
+    parser.add_argument(
+        "--data-dir", default=None,
+        help="Override the full path to the parquet directory for this year, "
+             "e.g. /eos/uscms/store/group/lpchbbrun3/gmachado/Test_v15/2024 "
+             "Skips the --tag-based path construction.",
+    )
 
     args = parser.parse_args()
 

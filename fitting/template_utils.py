@@ -15,10 +15,21 @@ import pickle
 REGION_MAP = {
     "zgcr": "control-zgamma",
     "mucr": "control-tt",
+    "zmmcr": "control-zmumu",
     "vh": "signal-vh",
     "vbf": "signal-vbf",
     "ggf": "signal-ggf",
 }
+
+#systematics special groupings
+folder_systs = ["JES", "JER", "UES", "MuonPTScale", "MuonPTRes"]
+analysis_systs = ["pdf_Higgs", "scalevar7pt", "scalevar3pt"]
+year_systs = ["btagSFb", "btagSFc", "btagSFlight"]
+sig_th_systs = ["pdf_Higgs", "ISRPartonShower", "FSRPartonShower", "QCDScale"]
+
+#Add "VJets" to active_systs in setup.json in order to activate the systs below
+Zjets_thsysts = ['d1kappa_EW', 'Z_d2kappa_EW', 'Z_d3kappa_EW', 'd1K_NLO', 'd2K_NLO']
+Wjets_thsysts = ['d1kappa_EW', 'W_d2kappa_EW', 'W_d3kappa_EW', 'd1K_NLO', 'd2K_NLO', 'd3K_NLO'] 
 
 scalevar_map = {
     "3pt" : [0, 4, 8],             # case where muF^2 = muR^2
@@ -26,23 +37,28 @@ scalevar_map = {
 }
 
 scalevar_process = {
-    "ggF": "7pt",
-    "VBF": "3pt",
-    "WH": "3pt",
-    "ZH": "3pt",
+    "ggFbb": "7pt",
+    "ggFcc": "7pt",
+    "VBFbb": "3pt",
+    "VBFcc": "3pt",
+    "WHbb": "3pt",
+    "WHcc": "3pt",
+    "ZHbb": "3pt",
+    "ZHcc": "3pt",
     "ttH": "7pt"
 }
 
 def get_pdf_list(n_var = 103):
-    return [f"weight_pdf_{i}" for i in n_var] + [f"sumweight_pdf_{i}" for i in n_var]
+    #Collect columns for pdf analysis, sum_weights stored in pickle files
+    return [f"weight_pdf_{i}" for i in range(n_var)]
     
-
 def get_scale_list(structure = "7pt"):
-    
-    return [f"weight_scalevar_{i}" for i in scalevar_map[structure]] + [f"sumweight_scalevar_{i}" for i in scalevar_map[structure]]
+    #Collect columns for qcd scale analysis, sum_weights stored in pickle files
+    return [f"weight_scalevar_{structure}_{i}" for i in scalevar_map[structure]]
    
 def perform_analysis(data, selection, nom_weight, syst_analysis):
-
+    #Select which analysis to perform: QCDScale or PDF
+    #Returns the scale factor to be applied to the histogram
     sysdir = "Up" if "Up" in syst_analysis else "Down"
     if "pdf" in syst_analysis:
         rel_unc = pdf_analysis(data, nom_weight, selection)
@@ -56,9 +72,10 @@ def perform_analysis(data, selection, nom_weight, syst_analysis):
     return factor
 
 def pdf_analysis(data, nom_weight, selection, n_var = 103):
-
+    #Perform the PDF uncertainty analysis
+    #Returns the relative uncertainty
     pdfweights = []
-    for i in n_var:
+    for i in range(n_var):
         ri = data[f"sumweight_pdf_{i}"][selection] / data["sum_genWeight"][selection]
         pdfweights.append( data[f"weight_pdf_{i}"][selection] * nom_weight[selection] / ri )
 
@@ -69,7 +86,8 @@ def pdf_analysis(data, nom_weight, selection, n_var = 103):
     return rel_unc
 
 def scalevar_analysis(data, nom_weight, selection, structure, direction):
-
+    #Perform the QCD Scale uncertainty analysis
+    #Returns the scale factor
     r4 = data[f"sumweight_scalevar_{structure}_4"][selection] / data["sum_genWeight"][selection]
     scale4 = data[f"weight_scalevar_{structure}_4"][selection] * nom_weight[selection] / r4
 

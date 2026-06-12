@@ -25,6 +25,12 @@ from card_utils import (
     plot_mctf,
     one_bin
 )
+from template_utils import (
+    year_systs,
+    Zjets_thsysts,
+    Wjets_thsysts,
+    sig_th_systs
+)
 
 from hbb.common_vars import LUMI
 
@@ -70,6 +76,7 @@ def rhalphabet(args):
     # [FIXED] Define infile_path here!
     infile_path = Path(args.indir) / root_file_name if args.indir else working_dir / root_file_name
 
+    data_obs_name = config.get("data_obs_name", "Jetdata")
     qcd_tf_proc = config.get("qcd_proc", "QCD")
     pt_min_scale = config.get("pt_min_scale", 450.0)
     regions_to_fit = config.get("regions_to_fit", ["bb"])
@@ -114,46 +121,51 @@ def rhalphabet(args):
             "UES": rl.NuisanceParameter(f"CMS_ues_j_{year}", "lnN"),
             "MuonPTScale": rl.NuisanceParameter(f"CMS_scale_m_{year}", "lnN"),
             "MuonPTRes": rl.NuisanceParameter(f"CMS_res_m_{year}", "lnN"),
-            "btagSFb": rl.NuisanceParameter(f"CMS_btagSFb_{year}", "lnN"),
-            "btagSFc": rl.NuisanceParameter(f"CMS_btagSFc_{year}", "lnN"),
-            "btagSFlight": rl.NuisanceParameter(f"CMS_btagSFlight_{year}", "lnN"),
+            f"btagSFb_{year}": rl.NuisanceParameter(f"CMS_btagSFb_{year}", "lnN"),
+            f"btagSFc_{year}": rl.NuisanceParameter(f"CMS_btagSFc_{year}", "lnN"),
+            f"btagSFlight_{year}": rl.NuisanceParameter(f"CMS_btagSFlight_{year}", "lnN"),
             "btagSFb_correlated": rl.NuisanceParameter(f"CMS_btagSFb_correlated_{year}", "lnN"),
             "btagSFc_correlated": rl.NuisanceParameter(f"CMS_btagSFc_correlated_{year}", "lnN"),
-            "btagSFlight_correlated": rl.NuisanceParameter(
-                f"CMS_btagSFlight_correlated_{year}", "lnN"
-            ),
+            "btagSFlight_correlated": rl.NuisanceParameter(f"CMS_btagSFlight_correlated_{year}", "lnN"),
         }
 
         # --- B. Theory Systematics (PDF, Scale, ISR/FSR) ---
-        theory_systs = {
-            "pdf_ggF": rl.NuisanceParameter("pdf_Higgs_ggF", "lnN"),
-            "pdf_VBF": rl.NuisanceParameter("pdf_Higgs_VBF", "lnN"),
-            "pdf_VH": rl.NuisanceParameter("pdf_Higgs_VH", "lnN"),
-            "pdf_ttH": rl.NuisanceParameter("pdf_Higgs_ttH", "lnN"),
-            "scale_ggF": rl.NuisanceParameter("QCDscale_ggF", "lnN"),
-            "scale_VBF": rl.NuisanceParameter("QCDscale_VBF", "lnN"),
-            "scale_VH": rl.NuisanceParameter("QCDscale_VH", "lnN"),
-            "scale_ttH": rl.NuisanceParameter("QCDscale_ttH", "lnN"),
-            "isr_ggF": rl.NuisanceParameter("ISRPartonShower_ggF", "lnN"),
-            "isr_VBF": rl.NuisanceParameter("ISRPartonShower_VBF", "lnN"),
-            "isr_VH": rl.NuisanceParameter("ISRPartonShower_VH", "lnN"),
-            "isr_ttH": rl.NuisanceParameter("ISRPartonShower_ttH", "lnN"),
-            "fsr_ggF": rl.NuisanceParameter("FSRPartonShower_ggF", "lnN"),
-            "fsr_VBF": rl.NuisanceParameter("FSRPartonShower_VBF", "lnN"),
-            "fsr_VH": rl.NuisanceParameter("FSRPartonShower_VH", "lnN"),
-            "fsr_ttH": rl.NuisanceParameter("FSRPartonShower_ttH", "lnN"),
-        }
+        theory_systs = {}
+
+        sig_mode = ["ggF", "VBF", "VH", "ttH"]
+
+        for mode in sig_mode:
+            for th in sig_th_systs:
+                theory_systs[f"{th}_{mode}"] = rl.NuisanceParameter(f"{th}_{mode}", 'lnN') 
+        
+        for sys in set(Zjets_thsysts + Wjets_thsysts):
+            theory_systs[sys] = rl.NuisanceParameter(f"CMS_hbb_{sys}", 'lnN') 
+
 
         # Combine all available systematics into one map
         all_available = {**available_exp_systs, **theory_systs}
 
         # Pull active list from JSON config
         active_list = config.get("active_systematics", [])
-        for name in active_list:
-            if name in all_available:
-                syst_map[name] = all_available[name]
+
+        def sys_check(sys_name):
+            if sys_name in all_available:
+                syst_map[sys_name] = all_available[sys_name]
             else:
-                print(f"Warning: Systematic {name} requested in JSON but not defined in script.")
+                print(f"Warning: Systematic {sys_name} requested in JSON but not defined in script.")
+
+        #Check all systematic special groupings (held in template_utils.py)
+        for name in active_list:
+            if name == "VJets":
+                for sys in set(Zjets_thsysts + Wjets_thsysts):
+                    sys_check(sys)
+            elif name in year_systs:
+                sys_check(f"sys_{year}")
+            elif name in sig_th_systs:
+                for mode in sig_mode:
+                    sys_check(f"{name}_{mode}")
+            else:
+                sys_check(name)
 
     # ---------------------------------------------------------
     # 4. QCD ESTIMATION LOOP
@@ -289,13 +301,14 @@ def rhalphabet(args):
                 )
 
                 if qcdfit.status() != 0:
+                    #want to save the values every time so that you don't start from scratch next time you rerun the script.
                     fitfailed_qcd[reg] += 1
-                else:
                     allparams = dict(zip(qcdfit.nameArray(), qcdfit.valueArray()))
                     pvalues = [allparams[p.name] for p in tf_MCtempl.parameters.reshape(-1)]
                     new_values = np.array(pvalues).reshape(tf_MCtempl.parameters.shape)
                     with initF.open("w") as outfile:
                         json.dump({"initial_vals": new_values.tolist()}, outfile)
+                else:
                     break
 
             if fitfailed_qcd[reg] >= 5:
@@ -500,7 +513,7 @@ def rhalphabet(args):
 
                 # Data
                 data_obs = get_template(
-                    infile_path, "data_obs", region, binindex + 1, cat, msd, syst="nominal"
+                    infile_path, data_obs_name, region, binindex + 1, cat, msd, syst="nominal"
                 )
                 ch.setObservation(data_obs[0:3])
 
@@ -521,6 +534,10 @@ def rhalphabet(args):
             for sample in failCh:
                 initial_qcd -= sample.getExpectation(nominal=True)
             initial_qcd[initial_qcd < 0] = 0
+
+            if args.debug:
+                print("FAIL QCD", failCh.name, "min", initial_qcd.min(), "zeros", np.sum(initial_qcd == 0))
+                print(initial_qcd)
 
             qcdparams = np.array(
                 [
@@ -561,7 +578,7 @@ def rhalphabet(args):
                 sumPassbb = tqqpassbb.getExpectation(nominal=True).sum()
                 sumPasscc = tqqpasscc.getExpectation(nominal=True).sum()
 
-                if 'singlet' in passCh.samples:
+                if any(s.name == f'{bin_pref_bb}_singlet' for s in passChbb.samples) or any(s.name == f'{bin_pref_cc}_singlet' for s in passChcc.samples):
                     stqqpassbb = passChbb['singlet']
                     stqqpasscc = passChcc['singlet']
                     stqqfail = failCh['singlet']
@@ -742,5 +759,6 @@ if __name__ == "__main__":
     parser.add_argument("--mc-pt-order", type=int, default=0)
     parser.add_argument("--res-rho-order", type=int, default=0)
     parser.add_argument("--res-pt-order", type=int, default=0)
+    parser.add_argument("--debug", action="store_true", help="Enter debug mode")
     args = parser.parse_args()
     rhalphabet(args)
