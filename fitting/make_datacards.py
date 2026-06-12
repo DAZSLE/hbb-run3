@@ -578,7 +578,7 @@ def rhalphabet(args):
                 sumPassbb = tqqpassbb.getExpectation(nominal=True).sum()
                 sumPasscc = tqqpasscc.getExpectation(nominal=True).sum()
 
-                if any(s.name == f'{bin_pref_bb}_singlet' for s in passChbb.samples) or any(s.name == f'{bin_pref_cc}_singlet' for s in passChcc.samples):
+                if any(s.name == f'ptbin{ptbin}{cat}passbb{year}_singlet' for s in passChbb.samples) or any(s.name == f'ptbin{ptbin}{cat}passcc{year}_singlet' for s in passChcc.samples):
                     stqqpassbb = passChbb['singlet']
                     stqqpasscc = passChcc['singlet']
                     stqqfail = failCh['singlet']
