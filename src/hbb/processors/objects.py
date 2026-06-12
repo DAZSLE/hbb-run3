@@ -158,6 +158,8 @@ def set_ak8jets(fatjets: FatJetArray, isRealData: bool, year: str, nano_version:
         fatjets["ParTPXcc"] = fatjets.globalParT3_Xcc
         fatjets["ParTPXcs"] = fatjets.globalParT3_Xcs
         fatjets["ParTPXqq"] = fatjets.globalParT3_Xqq
+        fatjets["ParTPTopbWq"] = fatjets.globalParT3_TopbWq
+        fatjets["ParTPTopbWqq"] = fatjets.globalParT3_TopbWqq
 
         fatjets["ParTPXbbVsQCD"] = fatjets.globalParT3_Xbb / (
             fatjets.globalParT3_Xbb + fatjets.globalParT3_QCD

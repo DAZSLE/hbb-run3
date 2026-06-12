@@ -102,7 +102,7 @@ lumiMasks = {
 
 def add_pileup_weight(weights: Weights, year: str, nPU):
     # clip nPU from 0 to 150
-    nPU = ak_clip(nPU, 0, 150)
+    # nPU = ak_clip(nPU, 0, 99)
 
     # https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun3
     values = {}

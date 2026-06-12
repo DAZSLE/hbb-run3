@@ -85,14 +85,17 @@ def get_BDT_model(BDT_file: str):
         "FatJet1_phi",
         "FatJet1_eta",
         "FatJet1_msd",
-        "FatJet1_pnetMass",
-        "FatJet1_pnetTXbb",
-        "FatJet1_pnetTXcc",
-        "FatJet1_pnetTXqq",
-        "FatJet1_pnetTXgg",
         "VBFPair_mjj",
         "VBFPair_deta",
-        "Photon0_pt",
+        "FatJet1_ParTPQCD",
+        "FatJet1_ParTPXbb",
+        "FatJet1_ParTPXcc",
+        "FatJet1_ParTPXqq",
+        "FatJet1_ParTPXcs",
+        "FatJet1_ParTPXbbVsQCD",
+        "FatJet1_ParTPXccVsQCD",
+        "FatJet1_ParTPXbbXcc",
+        "FatJet1_ParTmassX2p",
         "Jet0_pt",
         "Jet0_eta",
         "Jet0_phi",
@@ -182,7 +185,7 @@ class categorizer(SkimmerABC):
         self._btag_cut = b_taggers[self._year]["AK4"][self._btagger][self._btag_wp]
         self._mupt_type = "ptcorr"
         if self._evaluate_BDT:
-            self.bdt_model = get_BDT_model("src/hbb/data/MultiClassBDT_23Oct25.ubj")
+            self.bdt_model = get_BDT_model("src/hbb/data/MultiBDT_3cat_26Jun12.json")
 
         with Path("src/hbb/muon_triggers.json").open() as f:
             self._muontriggers = json.load(f)
@@ -487,6 +490,7 @@ class categorizer(SkimmerABC):
         dR = jets.delta_r(candidatejet)
         ak4_opphem_ak8 = jets[dphi > np.pi / 2]
         ak4_outside_ak8 = jets[dR > 0.8]
+        ak4_outside_ak8_medB = jets[(dR > 0.8) & (getattr(jets, self._btagger) > self._btag_cut)]
 
         # ak4 closest to ak8
         ak4_closest_ak8 = ak.firsts(
@@ -600,14 +604,17 @@ class categorizer(SkimmerABC):
                 "FatJet1_phi": subleadingjet.phi,
                 "FatJet1_eta": subleadingjet.eta,
                 "FatJet1_msd": subleadingjet.msd,
-                "FatJet1_pnetMass": subleadingjet.pnetmass,
-                "FatJet1_pnetTXbb": subleadingjet.particleNet_XbbVsQCD,
-                "FatJet1_pnetTXcc": subleadingjet.particleNet_XccVsQCD,
-                "FatJet1_pnetTXqq": subleadingjet.particleNet_XqqVsQCD,
-                "FatJet1_pnetTXgg": subleadingjet.particleNet_XggVsQCD,
                 "VBFPair_mjj": vbf_mjj,
                 "VBFPair_deta": vbf_deta,
-                "Photon0_pt": vgammaphoton.pt,
+                "FatJet1_ParTPQCD": subleadingjet.ParTPQCD,
+                "FatJet1_ParTPXbb": subleadingjet.ParTPXbb,
+                "FatJet1_ParTPXcc": subleadingjet.ParTPXcc,
+                "FatJet1_ParTPXqq": subleadingjet.ParTPXqq,
+                "FatJet1_ParTPXcs": subleadingjet.ParTPXcs,
+                "FatJet1_ParTPXbbVsQCD": subleadingjet.ParTPXbbVsQCD,
+                "FatJet1_ParTPXccVsQCD": subleadingjet.ParTPXccVsQCD,
+                "FatJet1_ParTPXbbXcc": subleadingjet.ParTPXbbXcc,
+                "FatJet1_ParTmassX2p": subleadingjet.ParTmassX2p,
                 "Jet0_pt": jet1_away.pt,
                 "Jet0_eta": jet1_away.eta,
                 "Jet0_phi": jet1_away.phi,
@@ -842,6 +849,9 @@ class categorizer(SkimmerABC):
                 "GenFlavor": genflavor,
                 "nFatJet": ak.num(goodfatjets, axis=1),
                 "nJet": ak.num(goodjets, axis=1),
+                "nJet_outsideFatJet0": ak.num(ak4_opphem_ak8, axis=1),
+                "nJet_opphemFatJet0": ak.num(ak4_outside_ak8, axis=1),
+                "nJet_outsideFatJet0_medBtag": ak.num(ak4_outside_ak8_medB, axis=1),
                 "FatJet0_pt": candidatejet.pt,
                 "FatJet0_phi": candidatejet.phi,
                 "FatJet0_eta": candidatejet.eta,
@@ -923,6 +933,8 @@ class categorizer(SkimmerABC):
                     "FatJet0_ParTPXbbVsQCD": candidatejet.ParTPXbbVsQCD,
                     "FatJet0_ParTPXccVsQCD": candidatejet.ParTPXccVsQCD,
                     "FatJet0_ParTPXbbXcc": candidatejet.ParTPXbbXcc,
+                    "FatJet0_ParTPTopbWq": candidatejet.ParTPTopbWq,
+                    "FatJet0_ParTPTopbWqq": candidatejet.ParTPTopbWqq,
                     "FatJet0_ParTmassGeneric": candidatejet.ParTmassGeneric,
                     "FatJet0_ParTmassX2p": candidatejet.ParTmassX2p,
                     "FatJet1_ParTPQCD": subleadingjet.ParTPQCD,
@@ -933,6 +945,8 @@ class categorizer(SkimmerABC):
                     "FatJet1_ParTPXbbVsQCD": subleadingjet.ParTPXbbVsQCD,
                     "FatJet1_ParTPXccVsQCD": subleadingjet.ParTPXccVsQCD,
                     "FatJet1_ParTPXbbXcc": subleadingjet.ParTPXbbXcc,
+                    "FatJet1_ParTPTopbWq": subleadingjet.ParTPTopbWq,
+                    "FatJet1_ParTPTopbWqq": subleadingjet.ParTPTopbWqq,
                     "FatJet1_ParTmassGeneric": subleadingjet.ParTmassGeneric,
                     "FatJet1_ParTmassX2p": subleadingjet.ParTmassX2p,
                 }
@@ -985,6 +999,8 @@ class categorizer(SkimmerABC):
                 "JetClosestFatJet0_eta": ak4_closest_ak8.eta,
                 "JetClosestFatJet0_phi": ak4_closest_ak8.phi,
                 "JetClosestFatJet0_mass": ak4_closest_ak8.mass,
+                "JetClosestFatJet0_dR": ak4_closest_ak8.delta_r(candidatejet),
+                "JetClosestFatJet0_dijetMass": (ak4_closest_ak8 + candidatejet).mass,
             }
 
         def skim(region, output_array):
