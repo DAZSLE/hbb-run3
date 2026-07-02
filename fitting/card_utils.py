@@ -8,6 +8,7 @@ Date: Feb 2026
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -200,9 +201,7 @@ def plot_mctf(tf_MCtempl, msdbins, name, _year, _tag, out_dir_base, pt_min=450.0
     print(f"Saved MCTF plots to {outdir}")
 
 
-def add_systematics(
-    sample, nominal, systs, infile_path, _year, components, region, ptbin, cat, obs
-):
+def add_systematics(sample, nominal, systs, infile_path, components, region, ptbin, cat, obs):
     """
     Applies lnN and Shape systematics to a Rhalphalib sample object.
 
@@ -211,7 +210,6 @@ def add_systematics(
         nominal (np.array): The nominal yield array.
         systs (dict): Dictionary mapping sys_name -> rl.NuisanceParameter.
         infile_path (Path): Path to ROOT file.
-        year (str): Analysis year.
         components (list): List of (process, flavor) tuples for merging.
         region (str): Region string (e.g. 'pass_bb_').
         ptbin (int): Bin index.
@@ -234,8 +232,36 @@ def add_systematics(
         syst_down = get_merged_template(
             infile_path, components, region, ptbin, cat, obs, syst=sys_name + "Down"
         )[0]
-        # Convert shape variation to single normalization number (lnN effect)
-        eff_up = shape_to_num(syst_up, nominal)
-        eff_do = shape_to_num(syst_down, nominal)
 
-        sample.setParamEffect(nuisance_par, eff_up, eff_do)
+        if nuisance_par.combinePrior == "lnN":
+            # Convert shape variation to single normalization number (lnN effect)
+            eff_up = shape_to_num(syst_up, nominal)
+            eff_do = shape_to_num(syst_down, nominal)
+
+            # In rhalphalib, eff_up is a numpy array representing the relative (multiplicative)
+            # effect of the parameter on the bin yields
+            sample.setParamEffect(nuisance_par, eff_up, eff_do)
+
+        elif nuisance_par.combinePrior == "shape":
+            # for shape priors rhalphalib expects a multiplicative per-bin array
+            sample.setParamEffect(
+                nuisance_par,
+                safe_ratio(syst_up, nominal),
+                safe_ratio(syst_down, nominal),
+            )
+
+        else:
+            warnings.warn(
+                f"Systematic {nuisance_par.name!r} has prior "
+                f"{nuisance_par.combinePrior!r} which is not yet implemented — skipping.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+
+# Guard against empty morphed templates
+def safe_ratio(varied, nom):
+    """Per-bin ratio clipped to [0.01, 100] when taking the ration between varied/nom template"""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(nom > 0, varied / nom, 1.0)
+    return np.clip(ratio, 0.01, 100.0)

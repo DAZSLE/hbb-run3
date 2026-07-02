@@ -83,6 +83,11 @@ python make_datacards.py \
     --analysis zgcr
 ```
 
+When including JMS/R, can use:
+```
+python plot_jmsr.py --file results/26Feb03/2022EE/datacards/zgcrModel_2022EE/zgcrModel_2022EE.root
+```
+
 ### For the signal region:
 ```
 python make_datacards.py \
@@ -213,3 +218,10 @@ python3 make_plots.py \
 - `--onto`: Specifies a background (usually QCD) to plot as an unfilled line, stacking other processes on top of it.
 
 - `-p`: Enables multiprocessing to speed up the rendering of multiple categories simultaneously.
+
+### 8.4 JMSR Validation
+
+To plot and get the final fit results use `plot_jmsr_postfit.py`:
+```
+ python plot_jmsr_postfit.py --fitfile results/.../fitDiagnosticsTest.root --wsfile  results/.../zgcrModel_2022EE.root --year 2022EE -j setup_zgcr.json
+```
