@@ -3,17 +3,15 @@
     "qcd_proc": "GJets",
     "pt_min_scale": 250.0,
     "regions_to_fit": ["bb", "cc"],
-    "do_systematics": true,
-    "active_systematics": ["JMSunconstrained", "JMRunconstrained"],
     "rho_scaling_max": -1.0,
     "samples_qq": ["Wjets", "Zjets", "Wgamma", "Zgamma", "TTGamma"],
 
     "observable": {
         "name": "msd",
         "branch_name": "FatJet0_msd",
-        "min": 20,
+        "min": 40,
         "max": 201,
-        "nbins": 23
+        "nbins": 21
     },
 
     "categories": {

@@ -303,6 +303,12 @@ def rhalphabet(args):
 
                 if qcdfit.status() != 0:
                     fitfailed_qcd[reg] += 1
+                    print(f"  [FIT] Attempt {fitfailed_qcd[reg]}/5 failed for {cat} {reg}"
+                          f" — status={qcdfit.status()}, covQual={qcdfit.covQual()}")
+                    # Perturb initial values randomly for next attempt
+                    perturbed = np.random.uniform(0.5, 2.0, tf_MCtempl.parameters.shape)
+                    for p, v in zip(tf_MCtempl.parameters.reshape(-1), perturbed.reshape(-1)):
+                        p.value = v
                 else:
                     allparams = dict(zip(qcdfit.nameArray(), qcdfit.valueArray()))
                     pvalues = [allparams[p.name] for p in tf_MCtempl.parameters.reshape(-1)]
@@ -312,6 +318,11 @@ def rhalphabet(args):
                     break
 
             if fitfailed_qcd[reg] >= 5:
+                print(f"\n[FIT] All 5 attempts failed for {cat} {reg}.")
+                print(f"  Last status={qcdfit.status()}, covQual={qcdfit.covQual()}")
+                print(f"  covQual meanings: -1=not calc, 0=not pos-def, 1=forced pos-def, 2=approx, 3=full accurate")
+                print(f"  MC template order: pt={args.mc_pt_order}, rho={args.mc_rho_order}")
+                print(f"  Inclusive P/F = {qcdeff:.4f} — if very small, model may be overparameterized")
                 raise RuntimeError(f"Could not fit QCD for {cat} {reg} after 5 tries!")
 
             plot_mctf(

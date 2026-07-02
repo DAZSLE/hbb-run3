@@ -101,7 +101,14 @@ def fill_binned_histogram(
         else:
             Txcc = data["FatJet0_ParTPXccVsQCD"]
             Txbb = data["FatJet0_ParTPXbbVsQCD"]
-            Txbbxcc = data["FatJet0_ParTPXbbXcc"]
+            if setup.get("use_modified_disc", False):
+                # Modified discriminant: (Xbb+Xcc) / (Xbb+Xcc+QCD+Xcs)
+                # Penalises W→cs events in the denominator
+                _num = data["FatJet0_ParTPXbb"] + data["FatJet0_ParTPXcc"]
+                _den = (_num + data["FatJet0_ParTPQCD"] + data["FatJet0_ParTPXcs"]).replace(0, np.nan)
+                Txbbxcc = (_num / _den).fillna(0.0)
+            else:
+                Txbbxcc = data["FatJet0_ParTPXbbXcc"]
             selection_dict = {
                 "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
                 "pass_cc": pre_selection & (Txbbxcc > working_point) & (Txcc > Txbb),
@@ -231,6 +238,14 @@ def main(args):
             "FatJet0_ParTPXbbXcc",
             "GenFlavor",
         ]
+        if setup.get("use_modified_disc", False):
+            # Raw ParT probabilities needed to compute modified discriminant on-the-fly
+            cols += [
+                "FatJet0_ParTPXbb",
+                "FatJet0_ParTPXcc",
+                "FatJet0_ParTPQCD",
+                "FatJet0_ParTPXcs",
+            ]
         if data_map_key == "EGammadata":
             cols += [
                 "Photon0_pt",
@@ -337,7 +352,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Unified Histogram Maker for Signal and CR")
     parser.add_argument("--year", required=True, choices=["2022", "2022EE", "2023", "2023BPix", "2024"])
-    parser.add_argument("--tag", required=True, help="Tag for the skims directory (e.g., 26Feb03)")
+    parser.add_argument("--tag", default=None, help="Tag for the skims directory (e.g., 26Feb03). Required if --data-dir is not provided.")
     parser.add_argument("--setup", required=True, help="Path to setup.json file")
     parser.add_argument("--outdir", default="results", help="Directory to save ROOT files")
     parser.add_argument("--save-root", action="store_true", help="Actually write the ROOT file")
@@ -349,6 +364,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+
+    if args.tag is None and args.data_dir is None:
+        parser.error("--tag is required when --data-dir is not provided.")
 
     # Ensure outdir exists before starting
     Path(args.outdir).mkdir(parents=True, exist_ok=True)
