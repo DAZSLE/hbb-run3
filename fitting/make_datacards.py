@@ -136,9 +136,6 @@ def rhalphabet(args):
             "btagSFb_correlated": rl.NuisanceParameter(f"CMS_btagSFb_correlated_{year}", "lnN"),
             "btagSFc_correlated": rl.NuisanceParameter(f"CMS_btagSFc_correlated_{year}", "lnN"),
             "btagSFlight_correlated": rl.NuisanceParameter(f"CMS_btagSFlight_correlated_{year}", "lnN"),
-            "btagSFlight_correlated": rl.NuisanceParameter(
-                f"CMS_btagSFlight_correlated_{year}", "lnN"
-            ),
             "JMSunconstrained": rl.NuisanceParameter(f"CMS_jms_{year}", "shapeU", lo=-5, hi=5),
             "JMRunconstrained": rl.NuisanceParameter(f"CMS_jmr_{year}", "shapeU", lo=-5, hi=5),
             "JMS": rl.NuisanceParameter(f"CMS_jms_{year}", "shape"),
@@ -176,13 +173,12 @@ def rhalphabet(args):
                 for sys in set(Zjets_thsysts + Wjets_thsysts):
                     sys_check(sys)
             elif name in year_systs:
-                sys_check(f"sys_{year}")
+                sys_check(f"{sys}_{year}")
             elif name in sig_th_systs:
                 for mode in sig_mode:
                     sys_check(f"{name}_{mode}")
             else:
                 sys_check(name)
-
     # ---------------------------------------------------------
     # 4. QCD ESTIMATION LOOP
     # ---------------------------------------------------------
@@ -423,7 +419,7 @@ def rhalphabet(args):
                         exp_syst_map = {
                             k: v
                             for k, v in syst_map.items()
-                            if not k.startswith(("pdf_", "scale_", "isr_", "fsr_", "JMS", "JMR"))
+                            if not any(ts in k for ts in (sig_th_systs + ["JMS","JMR"] + Zjets_thsysts + Wjets_thsysts))
                         }
 
                         add_systematics(
@@ -497,31 +493,63 @@ def rhalphabet(args):
 
                         # 3. Theory Systematics (Process-Specific Logic)
 
-                        # --- VBF / EWKZ Scale ---
-                        if proc_name == "VBF" or proc_name == "EWKZ":
-                            scale_up = get_merged_template(
-                                infile_path,
-                                info["components"],
-                                region,
-                                binindex + 1,
-                                cat,
-                                msd,
-                                syst="scalevar_3ptUp",
-                            )[0]
-                            scale_do = get_merged_template(
-                                infile_path,
-                                info["components"],
-                                region,
-                                binindex + 1,
-                                cat,
-                                msd,
-                                syst="scalevar_3ptDown",
-                            )[0]
-                            sample.setParamEffect(
-                                syst_map["scale_VBF"],
-                                np.sum(scale_up) / np.sum(nominal),
-                                np.sum(scale_do) / np.sum(nominal),
-                            )
+                        # --- V+Jets ---
+                        if proc_name in ["Wjets"]:
+                            for s_name in set(Wjets_thsysts):
+                                s_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Up",
+                                )[0]
+                                s_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Down",
+                                )[0]
+                                # Look up using the mapped name (e.g., pdf_VH)
+                                syst_obj = syst_map.get(s_name)
+                                if syst_obj:
+                                    sample.setParamEffect(
+                                        syst_obj,
+                                        np.sum(s_up) / np.sum(nominal),
+                                        np.sum(s_do) / np.sum(nominal),
+                                    )
+                        if proc_name in ["Zjets", "Zjetsbb", "Zjetsc", "Zjetslight"]:
+                            for s_name in set(Zjets_thsysts):
+                                s_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Up",
+                                )[0]
+                                s_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Down",
+                                )[0]
+                                # Look up using the mapped name (e.g., pdf_VH)
+                                syst_obj = syst_map.get(s_name)
+                                if syst_obj:
+                                    sample.setParamEffect(
+                                        syst_obj,
+                                        np.sum(s_up) / np.sum(nominal),
+                                        np.sum(s_do) / np.sum(nominal),
+                                    )
 
                         # --- Higgs Signal Theory (PDF, ISR/FSR, Scale) ---
                         if proc_name in ["ggF", "VBF", "WH", "ZH", "ggZH", "ttH"]:
@@ -529,7 +557,7 @@ def rhalphabet(args):
                             proc_map_name = "VH" if proc_name in ["WH", "ZH", "ggZH"] else proc_name
 
                             for s_key, s_name in [
-                                ("pdf", "PDF_weight"),
+                                ("pdf", "pdf_Higgs"),
                                 ("fsr", "FSRPartonShower"),
                                 ("isr", "ISRPartonShower"),
                             ]:
@@ -562,7 +590,7 @@ def rhalphabet(args):
                                     )
 
                             # ggF specific Scale (7pt)
-                            if proc_name == "ggF":
+                            if proc_name in ["ggF", "ttH"]:
                                 sc_up = get_merged_template(
                                     infile_path,
                                     info["components"],
@@ -570,7 +598,7 @@ def rhalphabet(args):
                                     binindex + 1,
                                     cat,
                                     msd,
-                                    syst="scalevar_7ptUp",
+                                    syst="scalevar7ptUp",
                                 )[0]
                                 sc_do = get_merged_template(
                                     infile_path,
@@ -579,10 +607,34 @@ def rhalphabet(args):
                                     binindex + 1,
                                     cat,
                                     msd,
-                                    syst="scalevar_7ptDown",
+                                    syst="scalevar7ptDown",
                                 )[0]
                                 sample.setParamEffect(
-                                    syst_map["scale_ggF"],
+                                    syst_map[f"QCDScale_{proc_name}"],
+                                    np.sum(sc_up) / np.sum(nominal),
+                                    np.sum(sc_do) / np.sum(nominal),
+                                )
+                            elif proc_name in ["VBF", "VH"]:
+                                sc_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst="scalevar3ptUp",
+                                )[0]
+                                sc_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst="scalevar3ptDown",
+                                )[0]
+                                sample.setParamEffect(
+                                    syst_map[f"QCDScale_{proc_name}"],
                                     np.sum(sc_up) / np.sum(nominal),
                                     np.sum(sc_do) / np.sum(nominal),
                                 )
@@ -660,11 +712,6 @@ def rhalphabet(args):
                 sumPasscc = tqqpasscc.getExpectation(nominal=True).sum()
 
                 if any(s.name == f'ptbin{ptbin}{cat}passbb{year}_singlet' for s in passChbb.samples) or any(s.name == f'ptbin{ptbin}{cat}passcc{year}_singlet' for s in passChcc.samples):
-                    stqqpassbb = passChbb['singlet']
-                    stqqpasscc = passChcc['singlet']
-                    stqqfail = failCh['singlet']
-                    
-                if "singlet" in passCh.samples:
                     stqqpassbb = passChbb["singlet"]
                     stqqpasscc = passChcc["singlet"]
                     stqqfail = failCh["singlet"]
@@ -711,7 +758,7 @@ def rhalphabet(args):
         samps = ["QCD", "ttbar", "singlet", "Wjets", "Zjetsc", "Zjetslight", "Zjetsbb"]
         for region in ["pass_bb_", "pass_cc_", "fail_"]:
 
-            ch_name = f"muonCR_{region.replace('_', '')}_{year}"
+            ch_name = f"muonCR{region.replace('_', '')}{year}"
 
             ch = rl.Channel(ch_name)
             muonCR_model.addChannel(ch)
