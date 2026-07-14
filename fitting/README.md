@@ -11,27 +11,67 @@ Make sure you have the right packages needed for fitting. (You only need to do t
 micromamba install root cms-combine -c conda-forge
 ```
 
+### lpcjobqueue
+The `make_hists_dask.py` script must be run from inside an lpcjobqueue singularity in order to access the LPCCondorCluster. Follow this set of instructions once:
+
+From your main hbb-run3 directory:
+```
+curl -OL https://raw.githubusercontent.com/CoffeaTeam/lpcjobqueue/main/bootstrap.sh
+bash bootstrap.sh
+```
+
+You can then enable your singularity using a specified python-coffea version:
+```
+./shell coffeateam/coffea-dask-almalinux9:2025.1.1-py3.10
+```
+
+You can then install the necessary dependencies of our framework, which will load each time you enable the singularity:
+```
+pip install -e .
+pip install -r requirements.txt
+```
+
 ## 2. Producing Histograms
-The `make_hists.py` script reads skims from EOS and produces two outputs used for downstream analysis. It is completely configuration-driven via `setup.json` files, so remember to customize your setup file for your case.
+The `make_hists_dask.py` script reads skims from EOS and produces two outputs used for downstream analysis. It is completely configuration-driven via `setup.json` files, so remember to customize your setup file for your case. 
+
+In order to save the templates used for fitting: --save-templates
+
+In order to save the plots used for validation: --save-plotting-pkl
+
+These two options can be used together!
+
 
 ### For zgamma control region:
+Must be done from within lpcjobqueue singularity. 
 ```
-python make_hists.py \
+python make_hists_dask.py \
     --year 2022EE \
     --tag 26Feb03 \
     --setup setup_zgcr.json \
     --outdir results \
-    --save-root
+    --save-templates \
+    --save-plotting-pkl
 ```
 ### For the signal region (VBF, ggF and VH):
+Must be done from within lpcjobqueue singularity. 
 In order to plot the BDT sorted signal regions, set do_BDT_regions = true in setup_sr.json
 ```
-python make_hists.py \
-    --year 2022EE \
-    --tag 26Feb03 \
+python make_hists_dask.py \
+    --year 2024 \
+    --tag 26June12 \
     --setup setup_sr.json \
     --outdir results \
-    --save-root
+    --save-templates \
+    --save-plotting-pkl
+```
+### The output must be collected by collect_hists.py, after you exit the singularity
+```
+python collect_hists.py \
+    --year 2024 \
+    --tag 26June12 \
+    --outdir results \
+    --save-templates \
+    --save-plotting-pkl
 ```
 Outputs:
 
