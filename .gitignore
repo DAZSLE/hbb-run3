@@ -28,6 +28,6 @@ plots/
 .vscode/
 condor/
 !src/condor/
-.dat
-.bak
-.dir
+*.dat
+*.bak
+*.dir
