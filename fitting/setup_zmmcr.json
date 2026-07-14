@@ -1,4 +1,5 @@
 {
+    "data_obs_name": "Muondata",
     "observable": {
         "name": "mll",
         "branch_name": "Zmm_MuonPair_mll",

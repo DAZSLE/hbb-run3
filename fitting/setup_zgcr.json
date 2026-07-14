@@ -1,4 +1,5 @@
 {
+    "data_obs_name": "EGammadata",
     "root_filename": "fitting_{year}_zgcr_msd.root",
     "qcd_proc": "GJets",
     "pt_min_scale": 250.0,

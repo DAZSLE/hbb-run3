@@ -13,9 +13,8 @@
         "ISRPartonShower", "FSRPartonShower",
         "btagSFb", "btagSFc", "btagSFlight",
         "btagSFb_correlated", "btagSFc_correlated", "btagSFlight_correlated",
-        "pdf_Higgs", "QCDscale","VJets"
+        "pdf_Higgs", "QCDScale","VJets"
     ],
-
 
     "samples_qq": ["Wjets", "Zjets", "EWKW", "EWKZ", "EWKV"],
 
