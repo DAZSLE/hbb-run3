@@ -427,7 +427,7 @@ def add_btag_weights(weights: Weights, jets: JetArray, btagger: str, wp: str, ye
     eff_c = eff_lookup(jets_c.hadronFlavour, jets_c.pt, abs(jets_c.eta))
 
     def calc_weight(eff, sf, pass_tag):
-        tagged = ak.prod(sf, axis=-1)
+        tagged = ak.prod(sf[pass_tag], axis=-1)
         untagged = ak.prod(((1 - sf*eff) / (1 - eff))[~pass_tag], axis=-1)
         return ak.fill_none(tagged * untagged, 1.)
     
