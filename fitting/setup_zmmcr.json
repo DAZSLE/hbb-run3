@@ -13,7 +13,15 @@
             "name": "control-zmumu",
             "bins": [300, 1200],
             "bin_branch": "Zmm_MuonPair_pt",
-            "bin_prefix": "pt"
+            "bin_prefix": "pt",
+            "tfmc_order": { 
+                "bb": {"pt": 0, "rho": 1 },
+                "cc": {"pt": 0, "rho": 1 }
+            },
+            "tfres_order": { 
+                "bb": {"pt": 0, "rho": 0 },
+                "cc": {"pt": 0, "rho": 0 }
+            }
         }
     },
 

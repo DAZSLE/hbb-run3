@@ -5,6 +5,7 @@ year_map = {
     "2022EE": ["2022EE"],
     "2023": ["2023"],
     "2023BPix": ["2023BPix"],
+    "2024": ["2024"],
     "2022-2023": ["2022", "2022EE", "2023", "2023BPix"],
 }
 
@@ -12,6 +13,8 @@ common_mc = {
     "ggf-hbb": {
         "GluGluHto2B_M-125",
         "GluGluHto2B_PT-200_M-125",
+    },
+    "ggf-hcc": {
         "GluGluHto2C_M-125",
         "GluGluHto2C_PT-200_M-125",
     },
@@ -20,16 +23,18 @@ common_mc = {
         "WminusH_Hto2B_WtoLNu_M-125",
         "WplusH_Hto2B_Wto2Q_M-125",
         "WplusH_Hto2B_WtoLNu_M-125",
-        "WminusH_Hto2C_Wto2Q_M-125",
-        "WminusH_Hto2C_WtoLNu_M-125",
-        "WplusH_Hto2C_Wto2Q_M-125",
-        "WplusH_Hto2C_WtoLNu_M-125",
         "ZH_Hto2B_Zto2L_M-125",
         "ZH_Hto2B_Zto2Q_M-125",
         "ZH_Hto2B_Zto2Nu_M-125",
         "ggZH_Hto2B_Zto2L_M-125",
         "ggZH_Hto2B_Zto2Nu_M-125",
         "ggZH_Hto2B_Zto2Q_M-125",
+    },
+    "vh-hcc": {
+        "WminusH_Hto2C_Wto2Q_M-125",
+        "WminusH_Hto2C_WtoLNu_M-125",
+        "WplusH_Hto2C_Wto2Q_M-125",
+        "WplusH_Hto2C_WtoLNu_M-125",
         "ZH_Hto2C_Zto2L_M-125",
         "ZH_Hto2C_Zto2Q_M-125",
         "ZH_Hto2C_Zto2Nu_M-125",
@@ -37,7 +42,8 @@ common_mc = {
         "ggZH_Hto2C_Zto2Nu_M-125",
         "ggZH_Hto2C_Zto2Q_M-125",
     },
-    "vbf-hbb": {"VBFHto2B_M-125_dipoleRecoilOn", "VBFHto2C_M-125"},
+    "vbf-hbb": {"VBFHto2B_M-125_dipoleRecoilOn", "VBFHto2B_M-125"},
+    "vbf-hcc": {"VBFHto2C_M-125"},
     "qcd": {
         "QCD_HT-100to200",
         "QCD_HT-200to400",
@@ -87,6 +93,29 @@ common_mc = {
         "WtoLNu-4Jets_2J",
         "WtoLNu-4Jets_3J",
         "WtoLNu-4Jets_4J",
+        "Wto2Q-2Jets_Bin-PTQQ-100",
+        "Wto2Q-2Jets_Bin-PTQQ-200",
+        "Wto2Q-2Jets_Bin-PTQQ-400"
+        "Wto2Q-2Jets_Bin-PTQQ-600",
+        "Wto2Q-3Jets_Bin-HT-100to400",
+        "Wto2Q-3Jets_Bin-HT-400to800",
+        "Wto2Q-3Jets_Bin-HT-800to1500",
+        "Wto2Q-3Jets_Bin-HT-1500to2500",
+        "Wto2Q-3Jets_Bin-HT-2500",
+        "WtoLNu-4Jets_Bin-1J",
+        "WtoLNu-4Jets_Bin-2J",
+        "WtoLNu-4Jets_Bin-3J",
+        "WtoLNu-4Jets_Bin-4J",
+        "WtoLNu-2Jets_Bin-1J-PTLNu-40to100",
+        "WtoLNu-2Jets_Bin-1J-PTLNu-100to200",
+        "WtoLNu-2Jets_Bin-1J-PTLNu-200to400",
+        "WtoLNu-2Jets_Bin-1J-PTLNu-400to600",
+        "WtoLNu-2Jets_Bin-1J-PTLNu-600",
+        "WtoLNu-2Jets_Bin-2J-PTLNu-40to100",
+        "WtoLNu-2Jets_Bin-2J-PTLNu-100to200",
+        "WtoLNu-2Jets_Bin-2J-PTLNu-200to400",
+        "WtoLNu-2Jets_Bin-2J-PTLNu-400to600",
+        "WtoLNu-2Jets_Bin-2J-PTLNu-600",             
     },
     "zjets": {
         "Zto2Q-2Jets_PTQQ-100to200_1J",
@@ -110,6 +139,24 @@ common_mc = {
         "DYto2L-4Jets_MLL-50_2J",
         "DYto2L-4Jets_MLL-50_3J",
         "DYto2L-4Jets_MLL-50_4J",
+        "Zto2Q-2Jets_Bin-PTQQ-100",
+        "Zto2Q-2Jets_Bin-PTQQ-200",
+        "Zto2Q-2Jets_Bin-PTQQ-400",
+        "Zto2Q-2Jets_Bin-PTQQ-600",
+        "Zto2Q-4Jets_Bin-HT-100to400",
+        "Zto2Q-4Jets_Bin-HT-400to800",
+        "Zto2Q-4Jets_Bin-HT-800to1500",
+        "Zto2Q-4Jets_Bin-HT-1500to2500",
+        "Zto2Q-4Jets_Bin-HT-2500",
+        "DYto2E-2Jets_MLL-50_0J",
+        "DYto2E-2Jets_MLL-50_1J",
+        "DYto2E-2Jets_MLL-50_2J",
+        "DYto2Mu-2Jets_MLL-50_0J",
+        "DYto2Mu-2Jets_MLL-50_1J",
+        "DYto2Mu-2Jets_MLL-50_2J",
+        "DYto2Tau-2Jets_MLL-50_0J",
+        "DYto2Tau-2Jets_MLL-50_1J",
+        "DYto2Tau-2Jets_MLL-50_2J",                           
     },
     "ewkv": {
         "VBFWtoLNu",
@@ -126,6 +173,15 @@ common_mc = {
         "ZGto2QG-1Jets_PTG-100to200",
         "ZGto2QG-1Jets_PTG-200",
         "ZGto2NuG-1Jets_PTG-10to100",
+        "ZGto2QG-1Jets_Bin-PTG-100",
+        "ZGto2QG-1Jets_Bin-PTG-200",
+        "ZGto2QG-1Jets_Bin-PTG-400",
+        "ZGto2QG-1Jets_Bin-PTG-600",
+        "ZGto2QG-1Jets",
+        "DYGto2LG-1Jets_Bin-MLL-50-PTG-100",
+        "DYGto2LG-1Jets_Bin-MLL-50-PTG-200",
+        "DYGto2LG-1Jets_Bin-MLL-50-PTG-400",
+        "DYGto2LG-1Jets_Bin-MLL-50-PTG-600",
     },
     "wgamma": {
         "WGtoLNuG-1Jets_PTG-100to200",
@@ -137,6 +193,16 @@ common_mc = {
         "WGtoLNuG-1Jets_PTG-10to100",
         "WGto2QG-1Jets_PTG-100to200",
         "WGto2QG-1Jets_PTG-200",
+        "WGto2QG-1Jets_Bin-PTG-100",
+        "WGto2QG-1Jets_Bin-PTG-200",
+        "WGto2QG-1Jets_Bin-PTG-400",
+        "WGto2QG-1Jets_Bin-PTG-600",
+        "WGto2QG-1Jets",  
+        "WGtoLNuG-1Jets_Bin-PTG-100",
+        "WGtoLNuG-1Jets_Bin-PTG-200",
+        "WGtoLNuG-1Jets_Bin-PTG-400",
+        "WGtoLNuG-1Jets_Bin-PTG-600",
+        "WGtoLNuG-1Jets",           
     },
     "ttgamma": {"TTG-1Jets_PTG-10to100", "TTG-1Jets_PTG-100to200", "TTG-1Jets_PTG-200"},
     "gjets": {
@@ -168,6 +234,15 @@ data_by_year = {
     "2023BPix": {
         "JetMET_Run2023D",
     },
+    "2024": {
+        "JetMET_Run2024C",
+        "JetMET_Run2024D",
+        "JetMET_Run2024E",
+        "JetMET_Run2024F",
+        "JetMET_Run2024G",
+        "JetMET_Run2024H",
+        "JetMET_Run2024I"
+    }
 }
 
 # --- ADDED for control-tt region ---
@@ -176,6 +251,14 @@ data_by_year_muon = {
     "2022EE": {"Muon_Run2022E", "Muon_Run2022F", "Muon_Run2022G"},
     "2023": {"Muon_Run2023Cv1", "Muon_Run2023Cv2", "Muon_Run2023Cv3", "Muon_Run2023Cv4"},
     "2023BPix": {"Muon_Run2023D"},
+    "2024": {
+        "Muon_Run2024C",
+        "Muon_Run2024D",
+        "Muon_Run2024E",
+        "Muon_Run2024F",
+        "Muon_Run2024G",
+        "Muon_Run2024H",
+        "Muon_Run2024I"}
 }
 
 # --- ADDED for control-zgamma region ---
@@ -184,4 +267,14 @@ data_by_year_zgamma = {
     "2022EE": {"EGamma_Run2022E", "EGamma_Run2022F", "EGamma_Run2022G"},
     "2023": {"EGamma_Run2023Cv1", "EGamma_Run2023Cv2", "EGamma_Run2023Cv3", "EGamma_Run2023Cv4"},
     "2023BPix": {"EGamma_Run2023D"},
+    "2024": {
+        "EGamma_Run2024C",
+        "EGamma_Run2024D",
+        "EGamma_Run2024E",
+        "EGamma_Run2024F",
+        "EGamma_Run2024G",
+        "EGamma_Run2024H",
+        "EGamma_Run2024I"
+
+    }
 }

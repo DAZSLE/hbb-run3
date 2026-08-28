@@ -4,7 +4,7 @@
     "qcd_proc": "QCD",
     "pt_min_scale": 450.0,
     "regions_to_fit": ["bb", "cc"],
-    "do_BDT_regions": false,
+    "do_BDT_regions": true,
     "rho_scaling_max": -2.1,
     "do_systematics": true,
     "do_muon_CR": true,
@@ -19,34 +19,63 @@
     "samples_qq": ["Wjets", "Zjets", "EWKW", "EWKZ", "EWKV"],
 
     "observable": {
-        "name": "msd",
-        "branch_name": "FatJet0_msdmatched",
-        "min": 40,
-        "max": 201,
+        "name": "ParTMassGeneric",
+        "branch_name": "FatJet0_ParTmassGeneric",
+        "qcdrho": "FatJet0_ParTmassGeneric_rho",
+        "min": 59,
+        "max": 220,
         "nbins": 23
     },
 
 "categories": {
-        "ggf": { "bins": [450, 1200] },
+        "ggf": { 
+            "bins": [450, 1200],
+            "tfmc_order": { 
+                "bb": {"pt": 0, "rho": 2 },
+                "cc": {"pt": 0, "rho": 2 }
+            },
+            "tfres_order": { 
+                "bb": {"pt": 0, "rho": 0 },
+                "cc": {"pt": 0, "rho": 0 }
+            }
+        },
         "vbf": {
             "bins": [1000, 13000],
             "bins_pt": [450, 1200],
             "bin_branch": "VBFPair_mjj",
-            "bin_prefix": "mjj"
+            "bin_prefix": "mjj",
+            "tfmc_order": { 
+                "bb": {"pt": 0, "rho": 2 },
+                "cc": {"pt": 0, "rho": 2 }
+            },
+            "tfres_order": { 
+                "bb": {"pt": 0, "rho": 0 },
+                "cc": {"pt": 0, "rho": 0 }
+            }
         },
-        "vh":  { "bins": [450, 1200] },
+        "vh":  { 
+            "bins": [450, 1200],
+            "tfmc_order": { 
+                "bb": {"pt": 0, "rho": 2 },
+                "cc": {"pt": 0, "rho": 2 }
+            },
+            "tfres_order": { 
+                "bb": {"pt": 0, "rho": 0 },
+                "cc": {"pt": 0, "rho": 0 }
+            }
+        },
         "mucr":  { "bins": [450, 1200] }
     },
 
     "process_groups": {
-        "ggFbb": { "components": [["ggFbb", ""]], "is_signal": true },
-        "VBFbb": { "components": [["VBFbb", ""]], "is_signal": true },
-        "WHbb":  { "components": [["WHbb", ""]], "is_signal": true },
-        "ZHbb":  { "components": [["ZHbb", ""]], "is_signal": true },
-        "ggFcc": { "components": [["ggFcc", ""]], "is_signal": true },
-        "VBFcc": { "components": [["VBFcc", ""]], "is_signal": true },
-        "WHcc":  { "components": [["WHcc", ""]], "is_signal": true },
-        "ZHcc":  { "components": [["ZHcc", ""]], "is_signal": true },
+        "ggF_hbb": { "components": [["ggFbb", ""]], "is_signal": true },
+        "VBF_hbb": { "components": [["VBFbb", ""]], "is_signal": true },
+        "WH_hbb":  { "components": [["WHbb", ""]], "is_signal": true },
+        "ZH_hbb":  { "components": [["ZHbb", ""]], "is_signal": true },
+        "ggF_hcc": { "components": [["ggFcc", ""]], "is_signal": true },
+        "VBF_hcc": { "components": [["VBFcc", ""]], "is_signal": true },
+        "WH_hcc":  { "components": [["WHcc", ""]], "is_signal": true },
+        "ZH_hcc":  { "components": [["ZHcc", ""]], "is_signal": true },
         "ttH": { "components": [["ttH", ""]], "is_signal": false },
         "ttbar": { "components": [["ttbar", ""]], "is_signal": false },
         "singlet": { "components": [["singlet", ""]], "is_signal": false },
@@ -64,16 +93,36 @@
     },
 
     "physics_model": {
-        "model": "HiggsAnalysis.CombinedLimit.PhysicsModel:multiSignalModel",
-        "maps": [
-            "map=.*/ggFbb:rggF_bb[1,-20,20]",
-            "map=.*/VBFbb:rVBF_bb[1,-20,20]",
-            "map=.*/WHbb:rVH_bb[1,-20,20]",
-            "map=.*/ZHbb:rVH_bb[1,-20,20]",
-            "map=.*/ggFcc:rggF_cc[1,-20,20]",
-            "map=.*/VBFcc:rVBF_cc[1,-20,20]",
-            "map=.*/WHcc:rVH_cc[1,-20,20]",
-            "map=.*/ZHcc:rVH_cc[1,-20,20]"
-        ]
+        "main": {
+            "model": "HiggsAnalysis.CombinedLimit.PhysicsModel:multiSignalModel",
+            "maps": [
+                "map=.*/ggF_hbb:rggF_bb[1,-20,20]",
+                "map=.*/VBF_hbb:rVBF_bb[1,-20,20]",
+                "map=.*/WH_hbb:rVH_bb[1,-20,20]",
+                "map=.*/ZH_hbb:rVH_bb[1,-20,20]",
+                "map=.*/ggF_hcc:rggF_cc[1,-20,20]",
+                "map=.*/VBF_hcc:rVBF_cc[1,-20,20]",
+                "map=.*/WH_hcc:rVH_cc[1,-20,20]",
+                "map=.*/ZH_hcc:rVH_cc[1,-20,20]"
+            ]
+        },
+        "couplingmodel": {
+            "model": "hbb.KappaBC:KBC",
+            "alt_pnames": {
+                "ggF_hbb" : "ggH_hbb",
+                "VBF_hbb" : "qqH_hbb",
+                "ggF_hcc" : "ggH_hcc",
+                "VBF_hcc" : "qqH_hcc"
+            },
+            "maps": [
+                "modes=ggH,qqH,VH",
+                "allowNegativeCouplings"
+            ],
+            "t2w_extra": "-m 125",
+            "build_preamble": [
+                "export CMSSW_BASE='/cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/combine-container:latest/home/cmsusr/CMSSW_16_0_0'",
+                "export COMBINE_SRC='/cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/cms-analysis/general/combine-container:latest/home/cmsusr/CMSSW_16_0_0/src/HiggsAnalysis/CombinedLimit'"
+            ]
+        }
     }
 }
