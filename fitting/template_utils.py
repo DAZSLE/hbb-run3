@@ -10,9 +10,27 @@ import uproot
 import pickle
 import hist
 import gc
+import re
 import shelve
 from pathlib import Path
 import subprocess
+
+# --- AN-23-206 App.H stitching of NLO photon-pT-binned V+γ samples ---------
+# The 2024 "Bin-...-PTG-{100,200,400,600}" samples are INCLUSIVE-above (min-pT
+# cut, no max) so stacking them multi-counts. Make each exclusive by keeping
+# only events whose GEN photon pT falls in that bin's window (AN-23-206 Appendix H).
+# Fully-inclusive members (e.g. ZGto2QG-1Jets) are dropped when their binned
+# partners are gen-stitched. Gated by setup flag "stitch_ptg".
+_PTG_EDGES = {"100": (100.0, 200.0), "200": (200.0, 400.0),
+              "400": (400.0, 600.0), "600": (600.0, np.inf)}
+# datasets to DROP entirely when stitching (fully-inclusive, replaced by stitched bins)
+_STITCH_DROP_INCLUSIVE = {"ZGto2QG-1Jets"}
+
+
+def _ptg_bin(dataset):
+    """Return '100'/'200'/'400'/'600' for a 2024 Bin-...-PTG-N sample, else None."""
+    m = re.search(r"Bin-(?:MLL-50-)?PTG-(100|200|400|600)$", dataset)
+    return m.group(1) if m else None
 
 
 # --- REGION DIRECTORY MAPPING ---
@@ -218,7 +236,8 @@ def eos_exists(path):
     return result.returncode == 0
 
 def fill_binned_histogram(
-    events, region_key, setup, args, systs=["nominal"], template_outfile_path="", plotting_outfile_path=""
+    events, region_key, setup, args, systs=["nominal"], template_outfile_path="", plotting_outfile_path="",
+    dataset="",
 ):
     samples_qq = setup.get("samples_qq", [])
     
@@ -261,7 +280,12 @@ def fill_binned_histogram(
             dphi_raw = np.abs(data["Photon0_phi"] - data["FatJet0_phi"])
             dphi = np.where(dphi_raw > np.pi, 2 * np.pi - dphi_raw, dphi_raw)
 
-        var_series = dphi if var_col == "delta_phi_photon_jet" else data[var_col]
+        if setup.get("use_regressed_mass", False):
+            var_series = data["FatJet0_ParTmassX2p"]
+        elif var_col == "delta_phi_photon_jet":
+            var_series = dphi
+        else:
+            var_series = data[var_col]
 
         genflavordata = (
             np.zeros(len(data), dtype=np.int8) if is_data else data["GenFlavor"].astype(np.int8)
@@ -280,28 +304,62 @@ def fill_binned_histogram(
             # Z(mumu) CR: observable is mll, bin variable is dimuon pair pt
             pre_selection = basic_cuts & (data[bin_branch] > pt_min)
 
+        # --- AN-23-206 App.H stitching of photon-pT-binned V+γ samples ---
+        if setup.get("stitch_ptg", False) and not is_data:
+            ptg = _ptg_bin(dataset)
+            if ptg is not None:
+                if "GenGammaPt" in data.columns:
+                    # gen-stitch: keep only events with GEN photon pT in this bin's window
+                    lo, hi = _PTG_EDGES[ptg]
+                    gpt = data["GenGammaPt"].astype(float)
+                    pre_selection = pre_selection & (gpt >= lo) & (gpt < hi)
+                else:
+                    # binned sample with no GEN photon (e.g. WGto2QG/DYGto2LG not yet
+                    # gen-wired) -> cannot stitch -> drop it, rely on the inclusive member
+                    continue
+            elif dataset in _STITCH_DROP_INCLUSIVE:
+                # fully-inclusive member replaced by the gen-stitched binned set -> drop
+                continue
+
         if "zmmcr" in region_key:
             # Only inclusive category for zmumu CR — no Txbb pass/fail
             selection_dict = {"inclusive": pre_selection}
         else:
-            Txcc = data["FatJet0_ParTPXccVsQCD"]
-            Txbb = data["FatJet0_ParTPXbbVsQCD"]
             if setup.get("use_modified_disc", False):
-                # Modified discriminant: (Xbb+Xcc) / (Xbb+Xcc+QCD+Xcs)
-                # Penalises W→cs events in the denominator
+                # All three discriminants use the same 4-body denominator
+                # (Xbb + Xcc + QCD + Xcs), following Cristina's definitions
                 _num = data["FatJet0_ParTPXbb"] + data["FatJet0_ParTPXcc"]
                 _den = (_num + data["FatJet0_ParTPQCD"] + data["FatJet0_ParTPXcs"]).replace(0, np.nan)
                 Txbbxcc = (_num / _den).fillna(0.0)
+                Txbb = (data["FatJet0_ParTPXbb"] / _den).fillna(0.0)
+                Txcc = (data["FatJet0_ParTPXcc"] / _den).fillna(0.0)
             else:
                 Txbbxcc = data["FatJet0_ParTPXbbXcc"]
+                Txbb = data["FatJet0_ParTPXbbVsQCD"]
+                Txcc = data["FatJet0_ParTPXccVsQCD"]
 
-            selection_dict = {
-                "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
-                "pass_cc": pre_selection & (Txbbxcc > working_point) & (Txcc > Txbb),
-                "fail": pre_selection & (Txbbxcc <= working_point),
-                "pass": pre_selection & (Txbbxcc > working_point),
-                "inclusive": pre_selection,
-            }
+            disc_mode = setup.get("disc_mode", "xbbxcc")
+            if disc_mode == "bbvsqcd":
+                # Reproduce Raffaele Gerosa's boosted Z->bb calibration selection:
+                # single-sided cut on p(X->bb) vs QCD (Txbb), bb-only (no cc split).
+                # VHP=0.99, HP=[0.975,0.99], MP=[0.95,0.975]; pass here = > working_point.
+                # Pair with use_modified_disc:false (so Txbb = raw FatJet0_ParTPXbbVsQCD)
+                # and regions_to_fit:["bb"].
+                pass_sel = Txbb > working_point
+                selection_dict = {
+                    "pass_bb": pre_selection & pass_sel,
+                    "fail": pre_selection & ~pass_sel,
+                    "pass": pre_selection & pass_sel,
+                    "inclusive": pre_selection,
+                }
+            else:
+                selection_dict = {
+                    "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
+                    "pass_cc": pre_selection & (Txbbxcc > working_point) & (Txcc > Txbb),
+                    "fail": pre_selection & (Txbbxcc <= working_point),
+                    "pass": pre_selection & (Txbbxcc > working_point),
+                    "inclusive": pre_selection,
+                }
 
         flavor_cuts = {
             "": ((genflavordata == 1) | (genflavordata == 2)),

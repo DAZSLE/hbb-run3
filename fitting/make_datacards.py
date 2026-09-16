@@ -60,6 +60,8 @@ def rhalphabet(args):
 
     datacard_dir.mkdir(parents=True, exist_ok=True)
     initvals_dir.mkdir(parents=True, exist_ok=True)
+    if not (initvals_dir / "initial_vals_data_vh_bb.json").exists():
+        os.popen(f"cp -r initial_vals/* {initvals_dir}/ 2>/dev/null")
 
     # Load Configuration
     json_name = f"setup_{analysis}.json"
@@ -93,6 +95,7 @@ def rhalphabet(args):
     # broaden/narrow the distribution by JMSR_SMEAR fraction
     JMSR_SMEAR = config.get("jmsr_smear", 0.1)  # read from JSON or hardcode
     jmsr_processes = config.get("jmsr_processes", [])  # e.g. ["zgammabb"] in JSON
+    jmsr_nuis_cache = {}  # per-flavor JMS/JMR nuisances when jmsr_decorrelate
 
     # ---------------------------------------------------------
     # 3. OBSERVABLES & SYSTEMATICS
@@ -240,24 +243,22 @@ def rhalphabet(args):
                 # Initial Values Loading
                 initF = initvals_dir / f"initial_vals_{cat}_{reg}.json"
                 initial_vals = None
-                mc_pt_order = cats_cfg[cat]["tfmc_order"][reg]["pt"]
-                mc_rho_order = cats_cfg[cat]["tfmc_order"][reg]["rho"]
                 if initF.exists():
                     with initF.open() as f:
                         loaded = np.array(json.load(f)["initial_vals"])
-                    if (loaded.shape[0] - 1 == mc_pt_order) and (
-                        loaded.shape[1] - 1 == mc_rho_order
+                    if (loaded.shape[0] - 1 == args.mc_pt_order) and (
+                        loaded.shape[1] - 1 == args.mc_rho_order
                     ):
                         initial_vals = loaded
                     else:
                         print(f"Order Mismatch for {reg}. Resetting.")
 
                 if initial_vals is None:
-                    initial_vals = np.full((mc_pt_order + 1, mc_rho_order + 1), 1.0)
+                    initial_vals = np.full((args.mc_pt_order + 1, args.mc_rho_order + 1), 1.0)
 
                 tf_MCtempl = rl.BasisPoly(
                     f"tf_MCtempl_{cat}{reg}{year}",
-                    (mc_pt_order, mc_rho_order),
+                    (args.mc_pt_order, args.mc_rho_order),
                     ["pt", "rho"],
                     basis="Bernstein",
                     init_params=initial_vals,
@@ -327,7 +328,7 @@ def rhalphabet(args):
                 print(f"\n[FIT] All 5 attempts failed for {cat} {reg}.")
                 print(f"  Last status={qcdfit.status()}, covQual={qcdfit.covQual()}")
                 print(f"  covQual meanings: -1=not calc, 0=not pos-def, 1=forced pos-def, 2=approx, 3=full accurate")
-                print(f"  MC template order: pt={mc_pt_order}, rho={mc_rho_order}")
+                print(f"  MC template order: pt={args.mc_pt_order}, rho={args.mc_rho_order}")
                 print(f"  Inclusive P/F = {qcdeff:.4f} — if very small, model may be overparameterized")
                 raise RuntimeError(f"Could not fit QCD for {cat} {reg} after 5 tries!")
 
@@ -351,12 +352,10 @@ def rhalphabet(args):
             )
 
             # Residual
-            res_pt_order = cats_cfg[cat]["tfres_order"][reg]["pt"]
-            res_rho_order = cats_cfg[cat]["tfres_order"][reg]["rho"]
-            resid_init = np.full((res_pt_order + 1, res_rho_order + 1), 1.0)
+            resid_init = np.full((args.res_pt_order + 1, args.res_rho_order + 1), 1.0)
             tf_dataResidual = rl.BasisPoly(
                 f"tf_dataResidual_{year}{cat}{reg}",
-                (res_pt_order, res_rho_order),
+                (args.res_pt_order, args.res_rho_order),
                 ["pt", "rho"],
                 basis="Bernstein",
                 init_params=resid_init,
@@ -369,533 +368,529 @@ def rhalphabet(args):
     # ---------------------------------------------------------
     # 5. MAIN MODEL BUILDING
     # ---------------------------------------------------------
-    pm_config = config.get(
-        "physics_model",
-        {
-            "main": {
-                "model": "HiggsAnalysis.CombinedLimit.PhysicsModel:multiSignalModel",
-                "maps": ["map=.*/.*:r[1,-20,20]"],
-            }
-        },
-    )
-    model_dict = {}
-    for model_name in pm_config:
-        model_dict[model_name] = rl.Model(f"{analysis}_{model_name}Model_{year}")
-        alt_model_pnames = pm_config[model_name].get("alt_pnames", {})
+    model = rl.Model(f"{analysis}Model_{year}")
 
-        for cat in cats:
-            if "bins_pt" in cats_cfg[cat]:
-                ptbins = np.array(cats_cfg[cat]["bins_pt"])
-            else:
-                ptbins = np.array(cats_cfg[cat]["bins"])
+    for cat in cats:
+        if "bins_pt" in cats_cfg[cat]:
+            ptbins = np.array(cats_cfg[cat]["bins_pt"])
+        else:
+            ptbins = np.array(cats_cfg[cat]["bins"])
 
-            for ptbin in range(len(ptbins) - 1):
-                binindex = ptbin
-                # Handle the VBF hi/lo binning logic
-                if analysis == "vbf" and "hi" in cat:
-                    binindex = 1
+        for ptbin in range(len(ptbins) - 1):
+            binindex = ptbin
+            # Handle the VBF hi/lo binning logic
+            if analysis == "vbf" and "hi" in cat:
+                binindex = 1
 
-                regions = [f"pass_{r}_" for r in regions_to_fit] + ["fail_"]
+            regions = [f"pass_{r}_" for r in regions_to_fit] + ["fail_"]
 
-                for region in regions:
-                    ch_name = f"ptbin{ptbin}{cat}{region.replace('_', '')}{year}"
-                    ch = rl.Channel(ch_name)
-                    model_dict[model_name].addChannel(ch)
+            for region in regions:
+                ch_name = f"ptbin{ptbin}{cat}{region.replace('_', '')}{year}"
+                ch = rl.Channel(ch_name)
+                model.addChannel(ch)
 
-                    for proc_name, info in sample_dict.items():
-                        # proc_name is e.g., 'ggF', 'VBF', 'ttbar'
-                        # this is a (sumw, edges, name, sumw2) tuple
-                        templ = get_merged_template(
-                            infile_path, info["components"], region, binindex + 1, cat, msd
+                for proc_name, info in sample_dict.items():
+                    # proc_name is e.g., 'ggF', 'VBF', 'ttbar'
+                    # this is a (sumw, edges, name, sumw2) tuple
+                    templ = get_merged_template(
+                        infile_path, info["components"], region, binindex + 1, cat, msd
+                    )
+                    nominal = templ[0]
+
+                    if badtemplate(nominal):
+                        print(
+                            f"Warning: Skipping template for {proc_name} in {ch_name} (failed badtemplate check)"
                         )
-                        nominal = templ[0]
+                        continue
 
-                        if badtemplate(nominal):
-                            print(
-                                f"Warning: Skipping template for {proc_name} in {ch_name} (failed badtemplate check)"
-                            )
-                            continue
+                    stype = rl.Sample.SIGNAL if info["is_signal"] else rl.Sample.BACKGROUND
+                    sample = rl.TemplateSample(ch.name + "_" + proc_name, stype, templ)
 
-                        stype = rl.Sample.SIGNAL if info["is_signal"] else rl.Sample.BACKGROUND
-                        datacard_pname = proc_name if proc_name not in alt_model_pnames else alt_model_pnames[proc_name]
-                        sample = rl.TemplateSample(ch.name + "_" + datacard_pname, stype, templ)
+                    # Apply Luminosity Uncertainty
+                    sample.setParamEffect(
+                        sys_lumi_uncor, lumi_err[year[:4]] ** (LUMI[year[:4]] / LUMI["2022-2024"])
+                    )
 
-                        # Apply Luminosity Uncertainty
-                        sample.setParamEffect(
-                            sys_lumi_uncor, lumi_err[year[:4]] ** (LUMI[year[:4]] / LUMI["2022-2024"])
+                    if do_systematics:
+                        # 1. Automatic MC Statistical Uncertainties (Barlow-Beeston Lite)
+                        # (Already handled inside add_systematics in card_utils.py)
+
+                        # 2. Experimental Systematics (Shapes from ROOT file)
+                        # Filter out specific systematics so they aren't double-applied
+                        exp_syst_map = {
+                            k: v
+                            for k, v in syst_map.items()
+                            if not any(ts in k for ts in (sig_th_systs + ["JMS","JMR"] + Zjets_thsysts + Wjets_thsysts))
+                        }
+
+                        add_systematics(
+                            sample,
+                            nominal,
+                            exp_syst_map,
+                            infile_path,
+                            info["components"],
+                            region,
+                            binindex + 1,
+                            cat,
+                            msd,
                         )
 
-                        if do_systematics:
-                            # 1. Automatic MC Statistical Uncertainties (Barlow-Beeston Lite)
-                            # (Already handled inside add_systematics in card_utils.py)
+                        # JMS/R systematics
+                        jmsr_syst_map = {
+                            k: v for k, v in syst_map.items() if k.startswith(("JMS", "JMR"))
+                        }
 
-                            # 2. Experimental Systematics (Shapes from ROOT file)
-                            # Filter out specific systematics so they aren't double-applied
-                            exp_syst_map = {
-                                k: v
-                                for k, v in syst_map.items()
-                                if not any(ts in k for ts in (sig_th_systs + ["JMS","JMR"] + Zjets_thsysts + Wjets_thsysts))
-                            }
+                        if proc_name in jmsr_processes:
+                            # Build a MorphHistW2 from the already-loaded nominal template.
+                            sumw, edges, _name, sumw2 = templ
+                            morph = MorphHistW2((sumw, edges, sumw2))
 
-                            add_systematics(
-                                sample,
-                                nominal,
-                                exp_syst_map,
-                                infile_path,
-                                info["components"],
-                                region,
-                                binindex + 1,
-                                cat,
-                                msd,
-                            )
+                            # Morphed Nominal
+                            morphed_nom, _, _ = morph.get(shift=0.0, scale=1.0)
 
-                            # JMS/R systematics
-                            jmsr_syst_map = {
-                                k: v for k, v in syst_map.items() if k.startswith(("JMS", "JMR"))
-                            }
+                            # Each pair shares the same morph — only one variant should be active at a time.
+                            jmsr_pairs = [
+                                (
+                                    "JMS",
+                                    "JMSunconstrained",
+                                    morph.get(shift=+JMSR_SCALE),
+                                    morph.get(shift=-JMSR_SCALE),
+                                ),
+                                (
+                                    "JMR",
+                                    "JMRunconstrained",
+                                    morph.get(scale=1.0 + JMSR_SMEAR),
+                                    morph.get(scale=1.0 - JMSR_SMEAR),
+                                ),
+                            ]
 
-                            if proc_name in jmsr_processes:
-                                # Build a MorphHistW2 from the already-loaded nominal template.
-                                sumw, edges, _name, sumw2 = templ
-                                morph = MorphHistW2((sumw, edges, sumw2))
+                            for key_a, key_b, (up_vals, _, _), (dn_vals, _, _) in jmsr_pairs:
+                                active_key = next(
+                                    (k for k in (key_a, key_b) if k in jmsr_syst_map), None
+                                )
+                                if active_key is None:
+                                    continue
+                                print(
+                                    f"Adding {jmsr_syst_map[active_key].name} to {proc_name}, {region}"
+                                )
 
-                                # Morphed Nominal
-                                morphed_nom, _, _ = morph.get(shift=0.0, scale=1.0)
-
-                                # Each pair shares the same morph — only one variant should be active at a time.
-                                jmsr_pairs = [
-                                    (
-                                        "JMS",
-                                        "JMSunconstrained",
-                                        morph.get(shift=+JMSR_SCALE),
-                                        morph.get(shift=-JMSR_SCALE),
-                                    ),
-                                    (
-                                        "JMR",
-                                        "JMRunconstrained",
-                                        morph.get(scale=1.0 + JMSR_SMEAR),
-                                        morph.get(scale=1.0 - JMSR_SMEAR),
-                                    ),
-                                ]
-
-                                for key_a, key_b, (up_vals, _, _), (dn_vals, _, _) in jmsr_pairs:
-                                    active_key = next(
-                                        (k for k in (key_a, key_b) if k in jmsr_syst_map), None
-                                    )
-                                    if active_key is None:
-                                        continue
+                                if not np.allclose(morphed_nom, nominal, rtol=1e-3, atol=1e-6):
                                     print(
-                                        f"Adding {jmsr_syst_map[active_key].name} to {proc_name}, {region}"
+                                        f"  Warning: MorphHistW2 nominal mismatch for {proc_name} in {ch_name}. "
+                                        f"Max relative diff: {np.max(np.abs(morphed_nom - nominal) / np.maximum(nominal, 1e-10)):.4f}"
                                     )
 
-                                    if not np.allclose(morphed_nom, nominal, rtol=1e-3, atol=1e-6):
-                                        print(
-                                            f"  Warning: MorphHistW2 nominal mismatch for {proc_name} in {ch_name}. "
-                                            f"Max relative diff: {np.max(np.abs(morphed_nom - nominal) / np.maximum(nominal, 1e-10)):.4f}"
-                                        )
+                                _nuis = jmsr_syst_map[active_key]
+                                if config.get("jmsr_decorrelate", False):
+                                    _fl = "bb" if proc_name.endswith("bb") else "ccs"
+                                    _base = "CMS_jms" if active_key.startswith("JMS") else "CMS_jmr"
+                                    _nm = f"{_base}_{year}_{_fl}"
+                                    if _nm not in jmsr_nuis_cache:
+                                        _u = "unconstrained" in active_key
+                                        jmsr_nuis_cache[_nm] = rl.NuisanceParameter(_nm, "shapeU", lo=-5, hi=5) if _u else rl.NuisanceParameter(_nm, "shape")
+                                    _nuis = jmsr_nuis_cache[_nm]
+                                sample.setParamEffect(
+                                    _nuis,
+                                    safe_ratio(
+                                        up_vals, morphed_nom
+                                    ),  # take the ratio between up and nominal
+                                    safe_ratio(dn_vals, morphed_nom),
+                                    scale=1,  # this is a rescaling effect,
+                                    # most useful for shape effects where the nuisance parameter effect
+                                    # needs to be magnified to ensure good vertical interpolation
+                                    # it is better left at 1, to avoid confusion later
+                                )
 
+                        # 3. Theory Systematics (Process-Specific Logic)
+
+                        # --- V+Jets ---
+                        if proc_name in ["Wjets"]:
+                            for s_name in set(Wjets_thsysts):
+                                s_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Up",
+                                )[0]
+                                s_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Down",
+                                )[0]
+                                # Look up using the mapped name (e.g., pdf_VH)
+                                syst_obj = syst_map.get(s_name)
+                                if syst_obj:
                                     sample.setParamEffect(
-                                        jmsr_syst_map[active_key],
-                                        safe_ratio(
-                                            up_vals, morphed_nom
-                                        ),  # take the ratio between up and nominal
-                                        safe_ratio(dn_vals, morphed_nom),
-                                        scale=1,  # this is a rescaling effect,
-                                        # most useful for shape effects where the nuisance parameter effect
-                                        # needs to be magnified to ensure good vertical interpolation
-                                        # it is better left at 1, to avoid confusion later
+                                        syst_obj,
+                                        np.sum(s_up) / np.sum(nominal),
+                                        np.sum(s_do) / np.sum(nominal),
                                     )
-
-                            # 3. Theory Systematics (Process-Specific Logic)
-
-                            # --- V+Jets ---
-                            if proc_name in ["Wjets"]:
-                                for s_name in set(Wjets_thsysts):
-                                    s_up = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst=f"{s_name}Up",
-                                    )[0]
-                                    s_do = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst=f"{s_name}Down",
-                                    )[0]
-                                    # Look up using the mapped name (e.g., pdf_VH)
-                                    syst_obj = syst_map.get(s_name)
-                                    if syst_obj:
-                                        sample.setParamEffect(
-                                            syst_obj,
-                                            np.sum(s_up) / np.sum(nominal),
-                                            np.sum(s_do) / np.sum(nominal),
-                                        )
-                            if proc_name in ["Zjets", "Zjetsbb", "Zjetsc", "Zjetslight"]:
-                                for s_name in set(Zjets_thsysts):
-                                    s_up = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst=f"{s_name}Up",
-                                    )[0]
-                                    s_do = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst=f"{s_name}Down",
-                                    )[0]
-                                    # Look up using the mapped name (e.g., pdf_VH)
-                                    syst_obj = syst_map.get(s_name)
-                                    if syst_obj:
-                                        sample.setParamEffect(
-                                            syst_obj,
-                                            np.sum(s_up) / np.sum(nominal),
-                                            np.sum(s_do) / np.sum(nominal),
-                                        )
-
-                            # --- Higgs Signal Theory (PDF, ISR/FSR, Scale) ---
-                            if any(s in proc_name for s in ["ggF", "VBF", "WH", "ZH", "ggZH", "ttH"]):
-                                # Mapping logic: if proc is WH/ZH/ggZH, use "VH" for the nuisance name
-                                # Extended to the other signal processes, since we separated them by bb/cc truth generated mode
-                                proc_map_name = proc_name
-                                if any(s in proc_name for s in ["WH", "ZH", "ggZH"]):
-                                    proc_map_name = "VH" 
-                                elif any(s in proc_name for s in ["ggF"]):
-                                    proc_map_name = "ggF" 
-                                elif any(s in proc_name for s in ["VBF"]):
-                                    proc_map_name = "VBF" 
-
-                                for s_name in [ "pdf_Higgs", "FSRPartonShower", "ISRPartonShower", ]:
-                                    s_up = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst=f"{s_name}Up",
-                                    )[0]
-                                    s_do = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst=f"{s_name}Down",
-                                    )[0]
-
-                                    # Look up using the mapped name (e.g., pdf_VH)
-                                    syst_obj = syst_map.get(f"{s_name}_{proc_map_name}")
-                                    if syst_obj:
-                                        sample.setParamEffect(
-                                            syst_obj,
-                                            np.sum(s_up) / np.sum(nominal),
-                                            np.sum(s_do) / np.sum(nominal),
-                                        )
-
-                                # ggF specific Scale (7pt)
-                                if proc_map_name in ["ggF", "ttH"]:
-                                    sc_up = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst="scalevar7ptUp",
-                                    )[0]
-                                    sc_do = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst="scalevar7ptDown",
-                                    )[0]
+                        if proc_name in ["Zjets", "Zjetsbb", "Zjetsc", "Zjetslight"]:
+                            for s_name in set(Zjets_thsysts):
+                                s_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Up",
+                                )[0]
+                                s_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Down",
+                                )[0]
+                                # Look up using the mapped name (e.g., pdf_VH)
+                                syst_obj = syst_map.get(s_name)
+                                if syst_obj:
                                     sample.setParamEffect(
-                                        syst_map[f"QCDScale_{proc_map_name}"],
-                                        np.sum(sc_up) / np.sum(nominal),
-                                        np.sum(sc_do) / np.sum(nominal),
+                                        syst_obj,
+                                        np.sum(s_up) / np.sum(nominal),
+                                        np.sum(s_do) / np.sum(nominal),
                                     )
-                                elif proc_map_name in ["VBF", "VH"]:
-                                    sc_up = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst="scalevar3ptUp",
-                                    )[0]
-                                    sc_do = get_merged_template(
-                                        infile_path,
-                                        info["components"],
-                                        region,
-                                        binindex + 1,
-                                        cat,
-                                        msd,
-                                        syst="scalevar3ptDown",
-                                    )[0]
+
+                        # --- Higgs Signal Theory (PDF, ISR/FSR, Scale) ---
+                        if proc_name in ["ggF", "VBF", "WH", "ZH", "ggZH", "ttH"]:
+                            # Mapping logic: if proc is WH/ZH/ggZH, use "VH" for the nuisance name
+                            proc_map_name = "VH" if proc_name in ["WH", "ZH", "ggZH"] else proc_name
+
+                            for s_key, s_name in [
+                                ("pdf", "pdf_Higgs"),
+                                ("fsr", "FSRPartonShower"),
+                                ("isr", "ISRPartonShower"),
+                            ]:
+                                s_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Up",
+                                )[0]
+                                s_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst=f"{s_name}Down",
+                                )[0]
+
+                                # Look up using the mapped name (e.g., pdf_VH)
+                                syst_obj = syst_map.get(f"{s_key}_{proc_map_name}")
+                                if syst_obj:
                                     sample.setParamEffect(
-                                        syst_map[f"QCDScale_{proc_map_name}"],
-                                        np.sum(sc_up) / np.sum(nominal),
-                                        np.sum(sc_do) / np.sum(nominal),
+                                        syst_obj,
+                                        np.sum(s_up) / np.sum(nominal),
+                                        np.sum(s_do) / np.sum(nominal),
                                     )
 
-                        ch.addSample(sample)
+                            # ggF specific Scale (7pt)
+                            if proc_name in ["ggF", "ttH"]:
+                                sc_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst="scalevar7ptUp",
+                                )[0]
+                                sc_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst="scalevar7ptDown",
+                                )[0]
+                                sample.setParamEffect(
+                                    syst_map[f"QCDScale_{proc_name}"],
+                                    np.sum(sc_up) / np.sum(nominal),
+                                    np.sum(sc_do) / np.sum(nominal),
+                                )
+                            elif proc_name in ["VBF", "VH"]:
+                                sc_up = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst="scalevar3ptUp",
+                                )[0]
+                                sc_do = get_merged_template(
+                                    infile_path,
+                                    info["components"],
+                                    region,
+                                    binindex + 1,
+                                    cat,
+                                    msd,
+                                    syst="scalevar3ptDown",
+                                )[0]
+                                sample.setParamEffect(
+                                    syst_map[f"QCDScale_{proc_name}"],
+                                    np.sum(sc_up) / np.sum(nominal),
+                                    np.sum(sc_do) / np.sum(nominal),
+                                )
 
-                    # Data
-                    data_obs = get_template(
-                        infile_path, data_obs_name, region, binindex + 1, cat, msd, syst="nominal"
-                    )
-                    ch.setObservation(data_obs[0:3])
+                    ch.addSample(sample)
 
-        # ---------------------------------------------------------
-        # 6. ADD DATA-DRIVEN QCD
-        # ---------------------------------------------------------
-        print("Adding Data-Driven QCD Background...")
-        for cat in cats:
-            if "bins_pt" in cats_cfg[cat]:
-                ptbins = np.array(cats_cfg[cat]["bins_pt"])
-            else:
-                ptbins = np.array(cats_cfg[cat]["bins"])
-
-            for ptbin in range(len(ptbins) - 1):
-                failCh = model_dict[model_name][f"ptbin{ptbin}{cat}fail{year}"]
-
-                initial_qcd = failCh.getObservation().astype(float)
-                for sample in failCh:
-                    initial_qcd -= sample.getExpectation(nominal=True)
-                initial_qcd[initial_qcd < 0] = 0
-
-                if args.debug:
-                    print("FAIL QCD", failCh.name, "min", initial_qcd.min(), "zeros", np.sum(initial_qcd == 0))
-                    print(initial_qcd)
-
-                qcdparams = np.array(
-                    [
-                        rl.IndependentParameter(f"qcdparam_ptbin{ptbin}{cat}{year}_{i}", 0)
-                        for i in range(msd.nbins)
-                    ]
+                # Data
+                data_obs = get_template(
+                    infile_path, data_obs_name, region, binindex + 1, cat, msd, syst="nominal"
                 )
-                scaledparams = (
-                    initial_qcd * (1 + 10.0 / np.maximum(1.0, np.sqrt(initial_qcd))) ** qcdparams
+                ch.setObservation(data_obs[0:3])
+
+    # ---------------------------------------------------------
+    # 6. ADD DATA-DRIVEN QCD
+    # ---------------------------------------------------------
+    print("Adding Data-Driven QCD Background...")
+    for cat in cats:
+        if "bins_pt" in cats_cfg[cat]:
+            ptbins = np.array(cats_cfg[cat]["bins_pt"])
+        else:
+            ptbins = np.array(cats_cfg[cat]["bins"])
+
+        for ptbin in range(len(ptbins) - 1):
+            failCh = model[f"ptbin{ptbin}{cat}fail{year}"]
+
+            initial_qcd = failCh.getObservation().astype(float)
+            for sample in failCh:
+                initial_qcd -= sample.getExpectation(nominal=True)
+            initial_qcd[initial_qcd < 0] = 0
+
+            if args.debug:
+                print("FAIL QCD", failCh.name, "min", initial_qcd.min(), "zeros", np.sum(initial_qcd == 0))
+                print(initial_qcd)
+
+            qcdparams = np.array(
+                [
+                    rl.IndependentParameter(f"qcdparam_ptbin{ptbin}{cat}{year}_{i}", 0)
+                    for i in range(msd.nbins)
+                ]
+            )
+            scaledparams = (
+                initial_qcd * (1 + 10.0 / np.maximum(1.0, np.sqrt(initial_qcd))) ** qcdparams
+            )
+            fail_qcd = rl.ParametericSample(
+                f"ptbin{ptbin}{cat}fail{year}_qcd", rl.Sample.BACKGROUND, msd, scaledparams
+            )
+            failCh.addSample(fail_qcd)
+
+            # Add QCD to all pass regions defined in JSON
+            for reg in regions_to_fit:
+                passCh = model[f"ptbin{ptbin}{cat}pass{reg}{year}"]
+                pass_qcd = rl.TransferFactorSample(
+                    f"ptbin{ptbin}{cat}pass{reg}{year}_qcd",
+                    rl.Sample.BACKGROUND,
+                    tf_params[cat][reg][ptbin, :],
+                    fail_qcd,
                 )
-                fail_qcd = rl.ParametericSample(
-                    f"ptbin{ptbin}{cat}fail{year}_qcd", rl.Sample.BACKGROUND, msd, scaledparams
+                passCh.addSample(pass_qcd)
+
+            if do_muon_CR:
+                passChbb = model[f"ptbin{ptbin}{cat}passbb{year}"]
+                passChcc = model[f"ptbin{ptbin}{cat}passcc{year}"]
+
+                tqqpassbb = passChbb["ttbar"]
+                tqqpasscc = passChcc["ttbar"]
+                tqqfail = failCh["ttbar"]
+
+                sumPass = (
+                    tqqpassbb.getExpectation(nominal=True).sum()
+                    + tqqpasscc.getExpectation(nominal=True).sum()
                 )
-                failCh.addSample(fail_qcd)
+                sumFail = tqqfail.getExpectation(nominal=True).sum()
 
-                # Add QCD to all pass regions defined in JSON
-                for reg in regions_to_fit:
-                    passCh = model_dict[model_name][f"ptbin{ptbin}{cat}pass{reg}{year}"]
-                    pass_qcd = rl.TransferFactorSample(
-                        f"ptbin{ptbin}{cat}pass{reg}{year}_qcd",
-                        rl.Sample.BACKGROUND,
-                        tf_params[cat][reg][ptbin, :],
-                        fail_qcd,
-                    )
-                    passCh.addSample(pass_qcd)
+                sumPassbb = tqqpassbb.getExpectation(nominal=True).sum()
+                sumPasscc = tqqpasscc.getExpectation(nominal=True).sum()
 
-                if do_muon_CR:
-                    passChbb = model_dict[model_name][f"ptbin{ptbin}{cat}passbb{year}"]
-                    passChcc = model_dict[model_name][f"ptbin{ptbin}{cat}passcc{year}"]
+                if any(s.name == f'ptbin{ptbin}{cat}passbb{year}_singlet' for s in passChbb.samples) or any(s.name == f'ptbin{ptbin}{cat}passcc{year}_singlet' for s in passChcc.samples):
+                    stqqpassbb = passChbb["singlet"]
+                    stqqpasscc = passChcc["singlet"]
+                    stqqfail = failCh["singlet"]
 
-                    tqqpassbb = passChbb["ttbar"]
-                    tqqpasscc = passChcc["ttbar"]
-                    tqqfail = failCh["ttbar"]
+                    sumPass += stqqpassbb.getExpectation(nominal=True).sum()
+                    sumPass += stqqpasscc.getExpectation(nominal=True).sum()
 
-                    sumPass = (
-                        tqqpassbb.getExpectation(nominal=True).sum()
-                        + tqqpasscc.getExpectation(nominal=True).sum()
-                    )
-                    sumFail = tqqfail.getExpectation(nominal=True).sum()
+                    sumPassbb += stqqpassbb.getExpectation(nominal=True).sum()
+                    sumPasscc += stqqpasscc.getExpectation(nominal=True).sum()
 
-                    sumPassbb = tqqpassbb.getExpectation(nominal=True).sum()
-                    sumPasscc = tqqpasscc.getExpectation(nominal=True).sum()
-
-                    if any(s.name == f'ptbin{ptbin}{cat}passbb{year}_singlet' for s in passChbb.samples) or any(s.name == f'ptbin{ptbin}{cat}passcc{year}_singlet' for s in passChcc.samples):
-                        stqqpassbb = passChbb["singlet"]
-                        stqqpasscc = passChcc["singlet"]
-                        stqqfail = failCh["singlet"]
-
-                        sumPass += stqqpassbb.getExpectation(nominal=True).sum()
-                        sumPass += stqqpasscc.getExpectation(nominal=True).sum()
-
-                        sumPassbb += stqqpassbb.getExpectation(nominal=True).sum()
-                        sumPasscc += stqqpasscc.getExpectation(nominal=True).sum()
-
-                        sumFail += stqqfail.getExpectation(nominal=True).sum()
-
-                        tqqPF = sumPass / sumFail
-                        tqqBC = sumPassbb / sumPasscc
-
-                        stqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-                        stqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-                        stqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
-
-                        stqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
-                        stqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
-
-                        stqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-                        stqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-                        stqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+                    sumFail += stqqfail.getExpectation(nominal=True).sum()
 
                     tqqPF = sumPass / sumFail
                     tqqBC = sumPassbb / sumPasscc
 
-                    tqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-                    tqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-                    tqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
+                    stqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+                    stqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+                    stqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
 
-                    tqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
-                    tqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
+                    stqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
+                    stqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
 
-                    tqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-                    tqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-                    tqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+                    stqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+                    stqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+                    stqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
 
-        muonCR_model = rl.Model("muonCR_" + year)
-        if do_muon_CR:
-            templates = {}
-            samps = ["QCD", "ttbar", "singlet", "Wjets", "Zjetsc", "Zjetslight", "Zjetsbb"]
-            for region in ["pass_bb_", "pass_cc_", "fail_"]:
+                tqqPF = sumPass / sumFail
+                tqqBC = sumPassbb / sumPasscc
 
-                ch_name = f"muonCR{region.replace('_', '')}{year}"
+                tqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+                tqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+                tqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
 
-                ch = rl.Channel(ch_name)
-                muonCR_model.addChannel(ch)
-                for sName in samps:
-                    templates[sName] = one_bin(infile_path, sName, region, 1, "mucr_", syst="nominal")
-                    nominal = templates[sName][0]
+                tqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
+                tqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
 
-                    if nominal < eps:
-                        print(f"Sample {sName} is too small, skipping")
-                        continue
+                tqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+                tqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+                tqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
 
-                    stype = rl.Sample.BACKGROUND
-                    sample = rl.TemplateSample(ch.name + "_" + sName, stype, templates[sName])
+    muonCR_model = rl.Model("muonCR_" + year)
+    if do_muon_CR:
+        templates = {}
+        samps = ["QCD", "ttbar", "singlet", "Wjets", "Zjetsc", "Zjetslight", "Zjetsbb"]
+        for region in ["pass_bb_", "pass_cc_", "fail_"]:
 
-                    sample.setParamEffect(
-                        sys_lumi_uncor, lumi_err[year[:4]] ** (LUMI[year[:4]] / LUMI["2022-2024"])
-                    )
-                    if do_systematics:
+            ch_name = f"muonCR{region.replace('_', '')}{year}"
 
-                        sample.autoMCStats(lnN=True)
+            ch = rl.Channel(ch_name)
+            muonCR_model.addChannel(ch)
+            for sName in samps:
+                templates[sName] = one_bin(infile_path, sName, region, 1, "mucr_", syst="nominal")
+                nominal = templates[sName][0]
 
-                    ch.addSample(sample)
+                if nominal < eps:
+                    print(f"Sample {sName} is too small, skipping")
+                    continue
 
-                data_obs = one_bin(infile_path, "Muondata", region, 1, "mucr_", syst="nominal")
-                ch.setObservation(data_obs, read_sumw2=True)
+                stype = rl.Sample.BACKGROUND
+                sample = rl.TemplateSample(ch.name + "_" + sName, stype, templates[sName])
 
-            tqqpassbb = muonCR_model["muonCRpassbb" + year + "_ttbar"]
-            tqqpasscc = muonCR_model["muonCRpasscc" + year + "_ttbar"]
-            tqqfail = muonCR_model["muonCRfail" + year + "_ttbar"]
+                sample.setParamEffect(
+                    sys_lumi_uncor, lumi_err[year[:4]] ** (LUMI[year[:4]] / LUMI["2022-2024"])
+                )
+                if do_systematics:
 
-            sumPass = (
-                tqqpassbb.getExpectation(nominal=True).sum()
-                + tqqpasscc.getExpectation(nominal=True).sum()
-            )
-            sumPassbb = tqqpassbb.getExpectation(nominal=True).sum()
-            sumPasscc = tqqpasscc.getExpectation(nominal=True).sum()
-            sumFail = tqqfail.getExpectation(nominal=True).sum()
+                    sample.autoMCStats(lnN=True)
 
-            stqqpassbb = muonCR_model["muonCRpassbb" + year + "_singlet"]
-            stqqpasscc = muonCR_model["muonCRpasscc" + year + "_singlet"]
-            stqqfail = muonCR_model["muonCRfail" + year + "_singlet"]
+                ch.addSample(sample)
 
-            sumPass += stqqpassbb.getExpectation(nominal=True).sum()
-            sumPass += stqqpasscc.getExpectation(nominal=True).sum()
+            data_obs = one_bin(infile_path, "Muondata", region, 1, "mucr_", syst="nominal")
+            ch.setObservation(data_obs, read_sumw2=True)
 
-            sumPassbb += stqqpassbb.getExpectation(nominal=True).sum()
-            sumPasscc += stqqpasscc.getExpectation(nominal=True).sum()
-            sumFail += stqqfail.getExpectation(nominal=True).sum()
+        tqqpassbb = muonCR_model["muonCRpassbb" + year + "_ttbar"]
+        tqqpasscc = muonCR_model["muonCRpasscc" + year + "_ttbar"]
+        tqqfail = muonCR_model["muonCRfail" + year + "_ttbar"]
 
-            tqqPF = sumPass / sumFail
-            tqqBC = sumPassbb / sumPasscc
+        sumPass = (
+            tqqpassbb.getExpectation(nominal=True).sum()
+            + tqqpasscc.getExpectation(nominal=True).sum()
+        )
+        sumPassbb = tqqpassbb.getExpectation(nominal=True).sum()
+        sumPasscc = tqqpasscc.getExpectation(nominal=True).sum()
+        sumFail = tqqfail.getExpectation(nominal=True).sum()
 
-            tqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-            tqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-            tqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
+        stqqpassbb = muonCR_model["muonCRpassbb" + year + "_singlet"]
+        stqqpasscc = muonCR_model["muonCRpasscc" + year + "_singlet"]
+        stqqfail = muonCR_model["muonCRfail" + year + "_singlet"]
 
-            tqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
-            tqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
+        sumPass += stqqpassbb.getExpectation(nominal=True).sum()
+        sumPass += stqqpasscc.getExpectation(nominal=True).sum()
 
-            tqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-            tqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-            tqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+        sumPassbb += stqqpassbb.getExpectation(nominal=True).sum()
+        sumPasscc += stqqpasscc.getExpectation(nominal=True).sum()
+        sumFail += stqqfail.getExpectation(nominal=True).sum()
 
-            stqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-            stqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
-            stqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
+        tqqPF = sumPass / sumFail
+        tqqBC = sumPassbb / sumPasscc
 
-            stqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
-            stqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
+        tqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+        tqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+        tqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
 
-            stqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-            stqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
-            stqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+        tqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
+        tqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
 
-        # ---------------------------------------------------------
-        # 7. SAVE & RENDER
-        # ---------------------------------------------------------
-        with (datacard_dir / f"{analysis}_{model_name}Model_{year}.pkl").open("wb") as fout:
-            pickle.dump(model_dict[model_name], fout)
-        modeldir = datacard_dir / f"{analysis}_{model_name}Model_{year}"
-        if do_muon_CR:
-            muonCR_model.renderCombine(modeldir)
-        model_dict[model_name].renderCombine(modeldir)
-        print(f"Datacards saved to {modeldir}")
+        tqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+        tqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+        tqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
 
-        out_cards = ""
-        for ch in model_dict[model_name]:
+        stqqpassbb.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+        stqqpasscc.setParamEffect(tqqeffSF, 1 * tqqeffSF)
+        stqqfail.setParamEffect(tqqeffSF, (1 - tqqeffSF) * tqqPF + 1)
+
+        stqqpassbb.setParamEffect(tqqeffBCSF, 1 * tqqeffBCSF)
+        stqqpasscc.setParamEffect(tqqeffBCSF, (1 - tqqeffBCSF) * tqqBC + 1)
+
+        stqqpassbb.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+        stqqpasscc.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+        stqqfail.setParamEffect(tqqnormSF, 1 * tqqnormSF)
+
+    # ---------------------------------------------------------
+    # 7. SAVE & RENDER
+    # ---------------------------------------------------------
+    with (datacard_dir / f"{analysis}Model_{year}.pkl").open("wb") as fout:
+        pickle.dump(model, fout)
+    modeldir = datacard_dir / f"{analysis}Model_{year}"
+    if do_muon_CR:
+        muonCR_model.renderCombine(modeldir)
+    model.renderCombine(modeldir)
+    print(f"Datacards saved to {modeldir}")
+
+    out_cards = ""
+    for ch in model:
+        if "/" in ch.name:
+            continue
+        out_cards += f"{ch.name}={ch.name}.txt "
+        with Path(f"{modeldir}/{ch.name}.txt").open("a") as f:
+            f.write("\nqcd_norm rateParam * qcd 1.0 [0,20]\n")
+    if do_muon_CR:
+        for ch in muonCR_model:
             if "/" in ch.name:
                 continue
             out_cards += f"{ch.name}={ch.name}.txt "
-            with Path(f"{modeldir}/{ch.name}.txt").open("a") as f:
-                f.write("\nqcd_norm rateParam * qcd 1.0 [0,20]\n")
-        if do_muon_CR:
-            for ch in muonCR_model:
-                if "/" in ch.name:
-                    continue
-                out_cards += f"{ch.name}={ch.name}.txt "
 
-        model_cls = pm_config[model_name]["model"]
-        maps = " ".join([f"--PO '{m}'" for m in pm_config[model_name]["maps"]])
-        t2w_extra = pm_config[model_name].get("t2w_extra", "")
-        bpre_in = pm_config[model_name].get("build_preamble", [])
-        bpre_out = ""
-        if len(bpre_in) > 0:
-            bpre_out = "".join([f"{b}\n" for b in bpre_in])
-            
+    # 1. Get Physics Model Config from JSON
+    # Default to simple signal strength 'r' if missing
+    pm_config = config.get(
+        "physics_model",
+        {
+            "model": "HiggsAnalysis.CombinedLimit.PhysicsModel:multiSignalModel",
+            "maps": ["map=.*/.*:r[1,-20,20]"],
+        },
+    )
 
-        # Construct the text2workspace command dynamically
-        t2w_cfg = f"-P {model_cls} --PO verbose {maps} {t2w_extra}"
+    model_cls = pm_config["model"]
+    maps = " ".join([f"--PO '{m}'" for m in pm_config["maps"]])
 
-        # Write the build script
-        with (modeldir / "build.sh").open("w") as f:
-            f.write("#!/bin/bash\n")
-            f.write(bpre_out)
-            f.write(f"combineCards.py {out_cards} > model_combined.txt\n")
-            f.write(f"text2workspace.py {t2w_cfg} model_combined.txt -o workspace.root\n")
-            f.write("echo 'Workspace created: workspace.root'\n")
+    # Construct the text2workspace command dynamically
+    t2w_cfg = f"-P {model_cls} --PO verbose {maps}"
 
-        (modeldir / "build.sh").chmod(0o755)
+    # Write the build script
+    with (modeldir / "build.sh").open("w") as f:
+        f.write("#!/bin/bash\n")
+        f.write(f"combineCards.py {out_cards} > model_combined.txt\n")
+        f.write(f"text2workspace.py {t2w_cfg} model_combined.txt -o workspace.root\n")
+        f.write("echo 'Workspace created: workspace.root'\n")
+
+    (modeldir / "build.sh").chmod(0o755)
 
 
 if __name__ == "__main__":
@@ -907,6 +902,10 @@ if __name__ == "__main__":
         "--outdir", default="results", help="Output directory for datacards and plots"
     )
     parser.add_argument("--analysis", required=True)
+    parser.add_argument("--mc-rho-order", type=int, default=1)
+    parser.add_argument("--mc-pt-order", type=int, default=0)
+    parser.add_argument("--res-rho-order", type=int, default=0)
+    parser.add_argument("--res-pt-order", type=int, default=0)
     parser.add_argument("--debug", action="store_true", help="Enter debug mode")
     args = parser.parse_args()
     rhalphabet(args)

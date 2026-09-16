@@ -1,5 +1,5 @@
 {
-    "data_obs_name": "Muondata",
+    "data_obs_name": "data_obs",
     "observable": {
         "name": "mll",
         "branch_name": "Zmm_MuonPair_mll",
@@ -13,20 +13,12 @@
             "name": "control-zmumu",
             "bins": [300, 1200],
             "bin_branch": "Zmm_MuonPair_pt",
-            "bin_prefix": "pt",
-            "tfmc_order": { 
-                "bb": {"pt": 0, "rho": 1 },
-                "cc": {"pt": 0, "rho": 1 }
-            },
-            "tfres_order": { 
-                "bb": {"pt": 0, "rho": 0 },
-                "cc": {"pt": 0, "rho": 0 }
-            }
+            "bin_prefix": "pt"
         }
     },
 
     "pt_min_scale": 300.0,
     "do_systematics": false,
     "active_systematics": [],
-    "samples_qq": ["Wjets", "Zjets"]
+    "samples_qq": []
 }
