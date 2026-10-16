@@ -237,6 +237,12 @@ if __name__ == "__main__":
         help="Evaluate BDT scores and use for categorization",
         default=False,
     )
+    parser.add_argument(
+        "--ttbar_category",
+        action="store_true",
+        help="Adds a ttbar category to the categorization",
+        default=False,
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--save-skim",
