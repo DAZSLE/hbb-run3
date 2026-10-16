@@ -110,6 +110,7 @@ def main(args):
                     "nano_version": args.nano_version,
                     "run_mode": args.run_mode,
                     "BDT": args.BDT,
+                    "ttbar_category": args.ttbar_category,
                 }
                 write_template(sh_templ, localsh, sh_args)
                 os.system(f"chmod u+x {localsh}")
@@ -170,6 +171,12 @@ def parse_args(parser):
         "--BDT",
         action="store_true",
         help="Evaluate BDT scores and use for categorization",
+        default=False,
+    )
+    parser.add_argument(
+        "--ttbar_category",
+        action="store_true",
+        help="Adds a ttbar category to the BDT categorization",
         default=False,
     )
 
