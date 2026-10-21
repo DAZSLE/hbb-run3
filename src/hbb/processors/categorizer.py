@@ -26,11 +26,13 @@ from hbb.corrections import (
     apply_jerc,
     correct_met,
     correct_muons,
+    correct_egm_obj,
     get_jetveto_event,
     lumiMasks,
     mupt_variations,
+    egm_variations
 )
-from hbb.jerc_eras import jerc_variations, run_map
+from hbb.jerc_eras import jerc_variations
 from hbb.processors.SkimmerABC import SkimmerABC
 from hbb.taggers import b_taggers
 
@@ -184,6 +186,8 @@ class categorizer(SkimmerABC):
             self._btagger = "btagUParTAK4B"
         self._btag_cut = b_taggers[self._year]["AK4"][self._btagger][self._btag_wp]
         self._mupt_type = "ptcorr"
+        self._elept_type = "ptcorr"
+        self._phopt_type = "ptcorr"
         if self._evaluate_BDT:
             self.bdt_model = get_BDT_model("src/hbb/data/MultiBDT_3cat_26Jun12.json")
 
@@ -239,6 +243,7 @@ class categorizer(SkimmerABC):
             ["nominal"]
             + [f"{var}_{dir}" for var in jerc_variations for dir in ["Up", "Down"]]
             + [f"{var}_{dir}" for var in mupt_variations for dir in ["Up", "Down"]]
+            + [f"{var}_{dir}" for var in egm_variations for dir in ["Up", "Down"]]
         )
 
         """
@@ -400,14 +405,6 @@ class categorizer(SkimmerABC):
         selection.add("metfilter", metfilter)
         del metfilter
 
-        mc_run = "mc"
-        if isRealData:
-            for keys, value in run_map.items():
-                if any(k in dataset for k in keys):
-                    mc_run = value
-                    break
-        jec_key = f"{self._year}_{mc_run}"
-
         fatjets = set_ak8jets(
             events.FatJet, isRealData, self._year, self._nano_version, events.Rho.fixedGridRhoFastjetAll
         )
@@ -434,12 +431,12 @@ class categorizer(SkimmerABC):
         met = events.PuppiMET
         # Apply jerc corrections to jets, fatjets, and met collections
         if not self._skip_syst:
-            jets = apply_jerc(jets, "AK4", self._year, jec_key)
-            fatjets = apply_jerc(fatjets, "AK8", self._year, jec_key)
-            met = correct_met(met, jets)  # PuppiMET Recommended for Run3
+            jets = apply_jerc(jets, "AK4", self._year, isRealData)
+            fatjets = apply_jerc(fatjets, "AK8", self._year, isRealData)
+            met = correct_met(met, jets, events.RawPuppiMET, events.CorrT1METJet, events.Rho.fixedGridRhoFastjetAll, self._year)  # PuppiMET Recommended for Run3
 
         # Select jets, fatjets, and met collections according to jerc variation shift
-        if shift_name != "nominal" and "Muon" not in shift_name:
+        if shift_name != "nominal" and not any(obj in shift_name for obj in ["Muon", "Electron", "Photon"]):
             var, direction = shift_name.split("_")
             attr = jerc_variations[var]
             if var in ("JES", "JER"):
@@ -451,6 +448,19 @@ class categorizer(SkimmerABC):
 
         goodfatjets = good_ak8jets(fatjets)
         goodjets = good_ak4jets(jets)
+        
+        bc_jets = jets[
+            (jets.pt > 50)
+            & (jets.eta > -0.5) & (jets.eta < -0.1)
+            & (jets.phi > -2.1) & (jets.phi < -1.8)
+            & (jets.neEmEF > 0.9) & (jets.chEmEF > 0.9)
+            & (jets.delta_phi(met) > 2.9)
+        ]
+        selection.add(
+            "badcrystal",
+            ~(isRealData & (events.run >= 362433) & (events.run <= 367144)
+            & (met.pt > 100) & (ak.num(bc_jets, axis=1) > 0))
+        )
 
         cut_jetveto = get_jetveto_event(jets, self._year)
         selection.add("ak4jetveto", cut_jetveto)
@@ -565,7 +575,12 @@ class categorizer(SkimmerABC):
         ak8_outside_dimuon = goodfatjets[(dR_leadm > 0.8) & (dR_subleadm > 0.8)]
         nak8_zmm = ak.num(ak8_outside_dimuon, axis=1)
 
-        goodelectron = good_electrons(events.Electron)
+        electrons = correct_egm_obj(events.Electron, "electron", self._year, isRealData, events.run)
+        if shift_name != "nominal" and "Electron" in shift_name:
+            var, direction = shift_name.split("_")
+            self._elept_type = f"{egm_variations[var]}_{direction.lower()}"
+            self._elemass_type = f"{egm_variations[var]}_{direction.lower()}"
+        goodelectron = good_electrons(electrons, self._elept_type)
         nelectrons = ak.num(goodelectron, axis=1)
 
         selection.add("noleptons", (nmuons == 0) & (nelectrons == 0))
@@ -584,11 +599,16 @@ class categorizer(SkimmerABC):
         )
         selection.add("muonDphiAK8", abs(ttbarmuon.delta_phi(candidatejet)) > 2 * np.pi / 3)
 
-        goodphotons = good_photons(events.Photon)
+        photons = correct_egm_obj(events.Photon, "photon", self._year, isRealData, events.run)
+        if shift_name != "nominal" and "Photon" in shift_name:
+            var, direction = shift_name.split("_")
+            self._phopt_type = f"{egm_variations[var]}_{direction.lower()}"
+            self._phomass_type = f"{egm_variations[var]}_{direction.lower()}"
+        goodphotons = good_photons(photons, self._phopt_type)
         nphotons = ak.num(goodphotons, axis=1)
 
-        ntightphotons = ak.num(tight_photons(events.Photon), axis=1)
-        vgammaphoton = ak.firsts(tight_photons(events.Photon))
+        ntightphotons = ak.num(tight_photons(photons, self._phopt_type), axis=1)
+        vgammaphoton = ak.firsts(tight_photons(photons, self._phopt_type))
 
         selection.add("onephoton", (nphotons == 1))
         selection.add("atleastonephoton", (ntightphotons >= 1))
@@ -731,6 +751,7 @@ class categorizer(SkimmerABC):
                 "trigger",
                 "lumimask",
                 "metfilter",
+                "badcrystal",
                 "ak4jetveto",
                 "minjetkin",
                 "antiak4btagMedium",
@@ -747,6 +768,7 @@ class categorizer(SkimmerABC):
                 "muontrigger",
                 "lumimask",
                 "metfilter",
+                "badcrystal",
                 "ak4jetveto",
                 "minjetkin",
                 "ak4btagMedium08",
@@ -758,6 +780,7 @@ class categorizer(SkimmerABC):
                 "egammatrigger",
                 "lumimask",
                 "metfilter",
+                "badcrystal",
                 "minjetkin_zgamma",
                 "atleastonephoton",
                 "antiak4btagMedium",
@@ -766,6 +789,7 @@ class categorizer(SkimmerABC):
                 "muontrigger",
                 "lumimask",
                 "metfilter",
+                "badcrystal",
                 "twoloosemuon",
                 "twomuon_zmm",
                 "muonkin_leadzmm",
@@ -857,7 +881,7 @@ class categorizer(SkimmerABC):
                 "FatJet1_pnetTXgg": subleadingjet.particleNet_XggVsQCD,
                 "VBFPair_mjj": vbf_mjj,
                 "VBFPair_deta": vbf_deta,
-                "Photon0_pt": vgammaphoton.pt,
+                "Photon0_pt": (getattr(vgammaphoton, self._phopt_type)),
                 "Photon0_phi": vgammaphoton.phi,
                 "Photon0_eta": vgammaphoton.eta,
                 "MET": met.pt,

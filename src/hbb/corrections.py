@@ -10,10 +10,7 @@ from __future__ import annotations
 import pathlib
 from pathlib import Path
 
-import contextlib
-
 import awkward as ak
-import dask_awkward as dak
 import numpy as np
 import correctionlib
 import correctionlib.schemav2
@@ -21,11 +18,10 @@ import pickle
 from coffea.analysis_tools import Weights
 from coffea.nanoevents.methods import vector
 from coffea.nanoevents.methods.nanoaod import JetArray, MuonArray
-from coffea.jetmet_tools import CorrectedJetsFactory, CorrectedMETFactory, JECStack
-from coffea.lookup_tools import extractor
+from coffea.jetmet_tools import CorrectedJetsFactory, CorrectedMETFactory, CorrectionLibJEC, CorrectionLibJECStack
 
 from hbb.MuonScaRe import pt_resol, pt_scale, pt_resol_var, pt_scale_var 
-from hbb.jerc_eras import jec_eras,jer_eras, jec_mc, jer_mc, jec_data, fatjet_jerc_keys, jet_jerc_keys
+from hbb.jerc_eras import jec_eras, jer_eras
 from hbb.taggers import b_taggers
 from hbb.EWHiggs_corrections import theory_xs, xs_ewkcorr, ewh_ptbin
 
@@ -48,6 +44,8 @@ pog_jsons = {
     "muon_pt" : ["MUO", "muon_scalesmearing.json.gz"],
     "electron": ["EGM", "electron.json.gz"],
     "photon": ["EGM", "photon.json.gz"],
+    "electronSS": ["EGM", "electronSS_EtDependent.json.gz"],
+    "photonSS": ["EGM", "photonSS_EtDependent.json.gz"],
     "pileup": ["LUM", "puWeights.json.gz"],
     "pileup2024": ["LUM", "puWeights_CDEFGHI.json.gz"], # file excludes 2024B 
     "fatjet_jec": ["JME", "fatJet_jerc.json.gz"],
@@ -324,54 +322,56 @@ jec_name_map = {
     "JetMass": "mass",
     "JetEta": "eta",
     "JetA": "area",
+    "JetPhi": "phi",
+    "JetChEmEF": "chEmEF",
+    "JetNeEmEF": "neEmEF",
     "ptGenJet": "pt_gen",
     "ptRaw": "pt_raw",
     "massRaw": "mass_raw",
     "Rho": "event_rho",
     "METpt": "pt",
     "METphi": "phi",
-    "JetPhi": "phi",
+    "RawMETpt": "pt",
+    "RawMETphi": "phi",
     "UnClusteredEnergyDeltaX": "MetUnclustEnUpDeltaX",
     "UnClusteredEnergyDeltaY": "MetUnclustEnUpDeltaY",
+    "JetMuonSubtrFactor": "muonSubtrFactor",
+    "JetMuonSubtrDeltaPhi": "muonSubtrDeltaPhi",
+    "CorrT1JetPt": "rawPt",
+    "CorrT1JetPhi": "phi",
+    "CorrT1JetEta": "eta",
+    "CorrT1JetArea": "area",
+    "CorrT1JetMuonSubtrFactor": "muonSubtrFactor",
+    "CorrT1JetMuonSubtrDeltaPhi": "muonSubtrDeltaPhi",
+    "CorrT1JetEmEF": "EmEF",
 }
 
-def apply_jerc(jets, jet_type: str, year: str, runkey: str):
+def apply_jerc(jets, jet_type: str, year: str, isRealData: bool):
     #Create CorrectedJetFactory and apply jercs+variations to JetArray or FatJetArray
-
-    jerc_path =f"{package_path}/hbb/data/jerc"
-    jec_path = f"{jerc_path}/{jec_eras[runkey]}"
-
+    
     if jet_type == "AK8":
-        jet_key = fatjet_jerc_keys[year]
+        cfile = get_pog_json("fatjet_jec", year)
     elif jet_type == "AK4":
-        jet_key = jet_jerc_keys[year]
-
-    #build filelist
-    files = []
-    if "mc" in runkey:
-        jer_path = f"{jerc_path}/{jer_eras[runkey]}"
-        for jec, ps in jec_mc.items():
-            files.append(f"{jec_path}/{jec_eras[runkey]}_{jec}_{jet_key}{ps}")
-        for jer, ps in jer_mc.items():
-            files.append(f"{jer_path}/{jer_eras[runkey]}_{jer}_{jet_key}{ps}")
-    else:
-        for jec, ps in jec_data.items():
-            files.append(f"{jec_path}/{jec_eras[runkey]}_{jec}_{jet_key}{ps}")
-
-    ext = extractor()
-    with contextlib.ExitStack() as stack:
-        real_files = [stack.enter_context(Path(f)) for f in files]
-        ext.add_weight_sets([f"* * {file}" for file in real_files])
-        ext.finalize()
-
-    jec_stack = JECStack(ext.make_evaluator())
+        cfile = get_pog_json("jet_jec", year)
+    
+    jec_stack = CorrectionLibJECStack.from_file(
+        cfile,
+        jec_tag=jec_eras[year],
+        data_type="DATA" if isRealData else "MC",
+        jet_type=f"{jet_type}PFPuppi",
+        jec_level="L1L2L3Res",
+        jer_tag=jer_eras[year],
+    )
+    
     jet_factory = CorrectedJetsFactory(jec_name_map, jec_stack)
 
     corrected_jets = jet_factory.build(jets)
     return corrected_jets
 
-def correct_met(met, jets: JetArray):
+def correct_met(met, jets: JetArray, rawMet, jets_CorrT1: JetArray, event_rho, year: str):
     #Create CorrectedMETFactory and recluster met
+    
+    cset = correctionlib.CorrectionSet.from_file(get_pog_json("jet_jec", year))
 
     dX_up = met.ptUnclusteredUp * np.cos(met.phiUnclusteredUp)
     dY_up = met.ptUnclusteredUp * np.sin(met.phiUnclusteredUp)
@@ -379,9 +379,15 @@ def correct_met(met, jets: JetArray):
     dY_nom = met.pt * np.sin(met.phi)
     met["MetUnclustEnUpDeltaX"] = dX_up - dX_nom
     met["MetUnclustEnUpDeltaY"] = dY_up - dY_nom
-
-    met_factory = CorrectedMETFactory(jec_name_map)
-    corrected_met = met_factory.build(met, jets)
+    
+    jets_CorrT1["event_rho"] = ak.broadcast_arrays(event_rho, jets_CorrT1.pt)[0]
+    
+    #Only AK4 correctors for MET recalculation
+    jec_L1 = CorrectionLibJEC(cset[f"{jec_eras[year]}_L1FastJet_AK4PFPUPPI"])
+    jec_L1L2L3 = CorrectionLibJEC(cset.compound[f"{jec_eras[year]}_L1L2L3Res_AK4PFPUPPI"])
+    
+    met_factory = CorrectedMETFactory(jec_name_map, jec_L1=jec_L1, jec_L1L2L3=jec_L1L2L3)
+    corrected_met = met_factory.build(met, jets, rawMet, jets_CorrT1)
 
     return corrected_met
 
@@ -582,6 +588,60 @@ def correct_muons(muons, events, year: str, isRealData: bool):
         muons["ptcorr_resol_down"] = pt_resol_var(muons.ptscalecorr, muons.ptcorr, muons.eta, "dn", cset, nested=True)
 
     return muons
+
+egm_variations = {
+    "ElectronPTScale": "ptcorr_scale",
+    "ElectronPTRes": "ptcorr_smear",
+    "PhotonPTScale": "ptcorr_scale",
+    "PhotonPTRes": "ptcorr_smear"
+}
+
+def correct_egm_obj(egm_obj_array, egm_obj_type: str, year: str, isRealData: bool, nano_version: str, event_run):
+    
+    cset = correctionlib.CorrectionSet.from_file(get_pog_json(f"{egm_obj_type}SS", year))
+    scale_ev = cset.compound["Scale"]
+    smear_and_syst_ev = cset.compound["SmearAndSyst"]
+    
+    egm_obj_array["event_run"] = ak.broadcast_arrays(event_run, egm_obj_array.pt)[0]
+    if "v15" in nano_version:
+        egm_obj_array["sc_eta"] = egm_obj_array.superclusterEta
+    else:
+        if egm_obj_type == "electron":
+            egm_obj_array["sc_eta"] = egm_obj_array.eta + egm_obj_array.deltaEtaSC
+        elif egm_obj_type == "photon":
+            egm_obj_array["sc_eta"] = egm_obj_array.eta
+            
+    e_flat, ne = ak.flatten(egm_obj_array), ak.num(egm_obj_array)
+    
+    def get_ss_sf(var):
+        sf = smear_and_syst_ev.evaluate(var, e_flat.pt, e_flat.r9, e_flat.sc_eta)
+        return ak.unflatten(sf, ne)
+    
+    if isRealData:
+        scale_flat = scale_ev.avaluate("scale", e_flat.event_run, e_flat.sc_eta, e_flat.r9, e_flat.pt, e_flat.seedGain)
+        scale = ak.unflatten(scale_flat, ne)
+        
+        egm_obj_array["ptcorr"] = egm_obj_array.pt * scale
+        
+    else:
+        rng = np.random.default_rng(seed=125)
+        random_numbers = rng.normal(loc=0.0, scale=1.0, size=len(egm_obj_array.pt))
+        
+        smearing = 1. + random_numbers * get_ss_sf("smear")
+        smearing_up = 1. + random_numbers * get_ss_sf("smear_up")
+        smearing_dn = 1. + random_numbers * get_ss_sf("smear_down")
+        smearing_scale_up = 1. + random_numbers * get_ss_sf("scale_up")
+        smearing_scale_dn = 1. + random_numbers * get_ss_sf("scale_down")
+        
+        egm_obj_array["ptcorr"] = egm_obj_array.pt * smearing
+        
+        egm_obj_array["ptcorr_smear_up"] = egm_obj_array.pt * smearing_up
+        egm_obj_array["ptcorr_smear_dn"] = egm_obj_array.pt * smearing_dn
+        
+        egm_obj_array["ptcorr_scale_up"] = egm_obj_array.pt * smearing_scale_up
+        egm_obj_array["ptcorr_scale_dn"] = egm_obj_array.pt * smearing_scale_dn
+        
+    return egm_obj_array
 
 def add_VJets_corrections(weights: Weights, dataset: str, genpart):
 

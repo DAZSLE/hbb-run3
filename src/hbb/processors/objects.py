@@ -32,16 +32,16 @@ def trig_match_sel(
     return trig_obj_sel
 
 
-def good_photons(photons: PhotonArray):
+def good_photons(photons: PhotonArray, pt_type):
 
-    sel = (photons.pt > 15) & (photons.isScEtaEB | photons.isScEtaEE) & (photons.mvaID_WP80)
+    sel = (getattr(photons, pt_type) > 15) & (photons.isScEtaEB | photons.isScEtaEE) & (photons.mvaID_WP80)
 
     return photons[sel]
 
 
-def tight_photons(photons: PhotonArray):
+def tight_photons(photons: PhotonArray, pt_type):
 
-    sel = (photons.pt > 30) & (photons.isScEtaEB | photons.isScEtaEE) & (photons.cutBased == 3)
+    sel = (getattr(photons, pt_type) > 30) & (photons.isScEtaEB | photons.isScEtaEE) & (photons.cutBased == 3)
 
     return photons[sel]
 
@@ -71,9 +71,9 @@ def highpt_muons(muons: MuonArray, pt_type):
     return loosemuons[sel]
 
 
-def good_electrons(electrons: ElectronArray):
+def good_electrons(electrons: ElectronArray, pt_type):
     sel = (
-        (electrons.pt > 10)
+        (getattr(electrons, pt_type) > 10)
         & (abs(electrons.eta) < 2.5)
         & (electrons.pfRelIso03_all < 0.15)
         & (electrons.mvaNoIso_WP90)
@@ -130,18 +130,26 @@ def set_ak4jets(jets: JetArray, isRealData: bool, year: str, nano_version: str, 
 
 
 # ak4 jet definition
-def good_ak4jets(jets: JetArray):
+def good_ak4jets(jets: JetArray, year: str):
     # Since the main AK4 collection for Run3 is the AK4 Puppi collection, jets originating from pileup are already suppressed at the jet clustering level
     # PuID might only be needed for forward region (WIP)
 
     # JETID: https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetID13p6TeV
-    sel = (
+    base_sel = (
         (jets.pt > 30)
         & (jets.jetidtight)
         & (jets.jetidtightlepveto)
         & (abs(jets.eta) < 5.0)
+        
+        #HE correction - 22/23/24
         & ~((jets.pt <= 50) & (abs(jets.eta) > 2.5) & (abs(jets.eta) < 3.0))
     )
+    
+    #HF correction - 22/23 only
+    sel = base_sel
+    if year == "2022" or year == "2022EE" or year == "2023" or year == "2023BPix":
+        sel = base_sel & ~(jets.pt <= 50 & (abs(jets.eta) > 3.0) & (abs(jets.eta) < 5.0))
+        
 
     return jets[sel]
 
