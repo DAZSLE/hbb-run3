@@ -141,17 +141,52 @@ def gen_selection_V(
     return {**GenVVars}
 
 
-def gen_selection_Vg(
-    events: NanoEventsArray,
-    fatjets: FatJetArray,
-):
-    # call gen selection V to extract the Z/W
-    GenVVars = gen_selection_V(events, fatjets)
+def gen_photon_reco(events: NanoEventsArray):
+    """Leading post-shower hard-process photon (GenPart, fromHardProcess+isLastCopy).
 
+    Kept for cross-checks and DY overlap-removal. This is NOT the stitching variable:
+    it is smeared by the parton shower relative to the LHE-level photon the gridpack
+    binning is actually applied on (see gen_photon_lhe).
+    """
     gammas = events.GenPart[
         (abs(events.GenPart.pdgId) == G_PDGID) * events.GenPart.hasFlags(GEN_FLAGS)
     ]
     gammas = ak.firsts(gammas)
-    GenGammaVars = {f"GenGamma{key}": gammas[var] for (var, key) in P4.items()}
+    return {f"GenGamma{key}": gammas[var] for (var, key) in P4.items()}
 
-    return {**GenVVars, **GenGammaVars}
+
+def gen_photon_lhe(events: NanoEventsArray):
+    """Leading LHE-level photon pT — the AN-23-206 App. H stitching variable.
+
+    The NLO photon-pT-binned V+gamma samples have their gridpack pT binning applied at
+    LHE level, so LHEPart_pt of the photon is exactly the quantity the bin boundaries
+    (100/200/400/600) are defined on. Stitching must cut on this, not the post-shower
+    GenGammaPt (a proxy). Confirmed present in central 2024 v15 and private PFNano
+    2022/2023 inputs (100% of events have a status-1 LHE photon). See AN-23-206 App. H/W.
+    """
+    photons = events.LHEPart[abs(events.LHEPart.pdgId) == G_PDGID]
+    # leading (highest-pT) LHE photon; -1 sentinel for the (empirically absent) no-photon case
+    return {"LHEGammaPt": ak.fill_none(ak.max(photons.pt, axis=1), -1.0)}
+
+
+def gen_selection_Vg(
+    events: NanoEventsArray,
+    fatjets: FatJetArray,
+):
+    """Hadronic V+gamma (ZGto2QG, WGto2QG): V->qq reconstruction + gen & LHE photon."""
+    GenVVars = gen_selection_V(events, fatjets)
+    return {**GenVVars, **gen_photon_reco(events), **gen_photon_lhe(events)}
+
+
+def gen_selection_Vg_leptonic(
+    events: NanoEventsArray,
+    fatjets: FatJetArray,
+):
+    """Leptonic V+gamma (DYGto2LG, WGtoLNuG): photon only.
+
+    Skips the hadronic V->qq reconstruction of gen_selection_V (the V children are
+    leptons/neutrinos here, not quarks), storing just the gen and LHE photon. The LHE
+    photon pT (LHEGammaPt) is the stitching variable; GenGammaPt is kept for cross-checks
+    and gen-level V+gamma overlap removal against plain DY.
+    """
+    return {**gen_photon_reco(events), **gen_photon_lhe(events)}
