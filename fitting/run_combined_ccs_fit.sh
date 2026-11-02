@@ -19,6 +19,7 @@ TAG=24Aug07_v15
 MODEL=zgcr
 ZMMDIR=""
 SUFFIX="_mumugamma"
+EXTRA=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --year)   YEAR=$2;   shift 2 ;;
@@ -26,6 +27,7 @@ while [[ $# -gt 0 ]]; do
     --model)  MODEL=$2;  shift 2 ;;
     --zmmdir) ZMMDIR=$2; shift 2 ;;
     --suffix) SUFFIX=$2; shift 2 ;;
+    --extra)  EXTRA=$2;  shift 2 ;;
     *) echo "Unknown argument: $1"; exit 1 ;;
   esac
 done
@@ -70,13 +72,13 @@ echo "=== FitDiagnostics (r_bb, r_ccs) ==="
 combine -M FitDiagnostics -d workspace_ccs_${YEAR}.root \
     --redefineSignalPOIs r_bb,r_ccs \
     --saveShapes --saveWithUncertainties \
-    --cminDefaultMinimizerStrategy 1 \
+    --cminDefaultMinimizerStrategy 1 ${EXTRA} \
     -n _ccs${SUFFIX}_${YEAR}
 
 echo "=== MultiDimFit --algo singles (clean profiled errors on r_bb, r_ccs, z_norm) ==="
 combine -M MultiDimFit -d workspace_ccs_${YEAR}.root --algo singles \
     --redefineSignalPOIs r_bb,r_ccs,z_norm \
-    --cminDefaultMinimizerStrategy 1 \
+    --cminDefaultMinimizerStrategy 1 ${EXTRA} \
     -n _ccs${SUFFIX}_singles_${YEAR}
 
 echo ""

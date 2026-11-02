@@ -5,6 +5,7 @@ from template_utils import (
     shelve_to_pkl
 )
 import argparse
+import getpass
 import os
 
 def main(args):
@@ -14,11 +15,11 @@ def main(args):
     
     if args.save_templates:
         output_root_path = Path(args.outdir) / args.tag / f"fitting_{args.year}_msd.root"
-        eos_path = f"/eos/uscms/store/group/lpchbbrun3/{os.getlogin()}/FITTING_TEMPLATES/"
+        eos_path = f"/eos/uscms/store/group/lpchbbrun3/{getpass.getuser()}/FITTING_TEMPLATES/"
         shelve_to_root(eos_path, output_root_path)
 
     if args.save_plotting_pkl:
-        eos_path = f"/eos/uscms/store/group/lpchbbrun3/{os.getlogin()}/PLOTTING_PICKLES/"
+        eos_path = f"/eos/uscms/store/group/lpchbbrun3/{getpass.getuser()}/PLOTTING_PICKLES/"
         shelve_to_pkl(eos_path, args)
 
 if __name__ == "__main__":

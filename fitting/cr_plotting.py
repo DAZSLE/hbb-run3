@@ -17,28 +17,9 @@ def dphi(phi1: pd.Series, phi2: pd.Series) -> pd.Series:
     return pd.Series(np.where(raw > np.pi, 2 * np.pi - raw, raw), index=phi1.index)
 
 
-def _dr(eta1, phi1, eta2, phi2) -> np.ndarray:
-    """ΔR = sqrt(Δη² + Δφ²), Δφ wrapped to [0, π]. Numpy arrays in/out."""
-    deta = np.asarray(eta1) - np.asarray(eta2)
-    dp = np.abs(np.asarray(phi1) - np.asarray(phi2))
-    dp = np.where(dp > np.pi, 2 * np.pi - dp, dp)
-    return np.sqrt(deta ** 2 + dp ** 2)
-
-
-def min_dr_photon_muon(df: pd.DataFrame) -> pd.Series:
-    """min ΔR(leading photon, {lead, sublead} muon). NaN where no photon."""
-    dr_lead = _dr(df["Photon0_eta"], df["Photon0_phi"],
-                  df["Zmm_MuonLead_eta"], df["Zmm_MuonLead_phi"])
-    dr_sub = _dr(df["Photon0_eta"], df["Photon0_phi"],
-                 df["Zmm_MuonSubLead_eta"], df["Zmm_MuonSubLead_phi"])
-    return pd.Series(np.minimum(dr_lead, dr_sub), index=df.index)
-
-
 def get_values(df: pd.DataFrame, var: str) -> pd.Series:
     if var == "dphi_photon_muon":
         return dphi(df["Photon0_phi"], df["Zmm_MuonLead_phi"])
-    if var == "dr_photon_muon":
-        return min_dr_photon_muon(df)
     return df[var]
 
 

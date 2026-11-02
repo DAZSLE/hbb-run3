@@ -1,11 +1,12 @@
 {
     "data_obs_name": "EGammadata",
-    "root_filename": "fitting_{year}_zgcr_msd.root",
+    "root_filename": "fitting_{year}_zgcr_regmass.root",
     "qcd_proc": "GJets",
     "pt_min_scale": 250.0,
     "stitch_ptg": true,
     "regions_to_fit": ["bb", "cc"],
     "use_modified_disc": true,
+    "use_regressed_mass": true,
     "do_systematics": true,
     "active_systematics": ["VJets"],
     "jmsr_scale": 7,
@@ -15,11 +16,11 @@
     "samples_qq": ["Wjets", "Zjets", "Wgamma", "Zgamma", "TTGamma"],
 
     "observable": {
-        "name": "msd",
-        "branch_name": "FatJet0_msd",
-        "min": 40,
-        "max": 201,
-        "nbins": 21
+        "name": "regmass",
+        "branch_name": "FatJet0_ParTmassX2p",
+        "min": 60,
+        "max": 220,
+        "nbins": 20
     },
 
     "categories": {

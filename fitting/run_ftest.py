@@ -14,8 +14,12 @@ from __future__ import annotations
 import argparse
 import os
 
+EXTRA = ""  # extra combine args (e.g. parameter ranges), set from --extra
+
 
 def run_command(cmd):
+    if cmd.startswith("combine") and EXTRA:
+        cmd = f"{cmd} {EXTRA}"
     print(f"\n[F-TEST] Running: {cmd}")
     os.system(cmd)
 
@@ -70,6 +74,8 @@ if __name__ == "__main__":
     parser.add_argument("--ntoys", default=100, type=int, help="Number of toys")
     parser.add_argument("--seed", default=123456, type=int, help="Random seed")
     parser.add_argument("--tag", default="", help="Tag to append to filenames (e.g. 2022)")
+    parser.add_argument("--extra", default="", help="Extra args for every combine call, e.g. --setParameterRanges CMS_jms_2024=-10,10")
     args = parser.parse_args()
 
+    EXTRA = args.extra
     main(args.null, args.alt, args.ntoys, args.seed, args.tag)

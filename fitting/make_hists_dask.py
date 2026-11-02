@@ -12,6 +12,7 @@ import argparse
 import json
 from pathlib import Path
 from datetime import datetime
+import getpass
 import os
 import subprocess
 
@@ -29,7 +30,9 @@ from template_utils import (
     Zjets_thsysts,
     Wjets_thsysts,
     eos_exists,
-    fill_binned_histogram
+    fill_binned_histogram,
+    _ptg_bin,
+    jmsr_event_mode,
 )
 
 def set_xrootd_env():
@@ -58,7 +61,9 @@ def submit_task(process, dataset, data_dir, load_cols, region, region_key, varia
         filters=pq_filters,
         load_sys_sumweights=do_loadsys_sumw,
         scalevar_structure=scalevar_structure,
-        local_search_transfer=False
+        # dask workers have no /eos/uscms FUSE mount -> xrdcp the parquets locally;
+        # --serial runs in-process where the FUSE path is readable
+        local_search_transfer=not getattr(args, "serial", False),
     )
 
     if events:
@@ -168,7 +173,9 @@ def main(args):
         col_systs = []
         if setup.get("do_systematics"):
             active_syst = setup.get("active_systematics", [])
-            col_systs = [f"{s}{var}" for s in active_syst if s not in folder_systs and s not in ["pdf_Higgs", "QCDScale", "VJets"] and s not in year_systs for var in ("Up", "Down")]
+            # JMS/JMR are not weight columns: morph mode builds them in make_datacards,
+            # event mode (jmsr_mode "event") varies the mass in fill_binned_histogram
+            col_systs = [f"{s}{var}" for s in active_syst if s not in folder_systs and s not in ["pdf_Higgs", "QCDScale", "VJets"] and s not in year_systs and not s.startswith(("JMS", "JMR")) for var in ("Up", "Down")]
             col_systs.extend([f"{s}_{args.year}{var}" for s in active_syst if s in year_systs for var in ("Up", "Down")])
             do_folder_systs = ["nominal"] + [f"{s}{var}" for s in active_syst if s in folder_systs for var in ("Up", "Down")]
 
@@ -187,6 +194,8 @@ def main(args):
                 do_loadsys_sumw = False
                 if setup.get("do_systematics") and not isRealData:
                     col_systs_proc, syst_loop = col_systs.copy(), col_systs.copy()
+                    if jmsr_event_mode(setup):
+                        syst_loop.extend([f"{s}{var}" for s in active_syst if s.startswith(("JMS", "JMR")) for var in ("Up", "Down")])
                     if process in scalevar_process:
                         do_loadsys_sumw = True
                         if "pdf_Higgs" in active_syst:
@@ -222,6 +231,15 @@ def main(args):
                     region = REGION_MAP[region_key] if not do_BDT_regions or "cr" in region_key else f"{REGION_MAP[region_key]}-BDT"
                     search_path = Path(data_dir / dataset /  "parquet" / variation / region)
 
+                    # a dataset present in an overlay dir (e.g. a partial reskim) is read from there
+                    from_overlay = False
+                    for overlay in args.overlay_data_dir or []:
+                        overlay_path = Path(overlay) / dataset / "parquet" / variation / region
+                        if eos_exists(str(overlay_path).replace("/eos/uscms", "")):
+                            data_dir, search_path = Path(overlay), overlay_path
+                            from_overlay = True
+                            break
+
                     if not eos_exists(str(search_path).replace("/eos/uscms", "")):
                         if args.debug:
                             print("DOESN'T EXIST: ", search_path)
@@ -233,16 +251,20 @@ def main(args):
 
                     template_db = f"fitting_{args.year}_{region}_{process}_{dataset}_{variation}_{obs_name}_shelved"
                     plotting_db = f"plotting_{args.year}_{region}_{process}_{dataset}_{variation}_{obs_name}_shelved"
-                    tmp_eos_output = f"/store/group/lpchbbrun3/{os.getlogin()}"
+                    tmp_eos_output = f"/store/group/lpchbbrun3/{getpass.getuser()}"
                     if args.debug:
                         print(template_db)
 
-                    # AN-23-206 stitching needs the GEN photon pT; only ZGto2QG
-                    # samples have it written (gen_selection_Vg). Load it per-dataset
-                    # so we never request a missing column for other samples.
+                    # AN-23-206 stitching of the photon-pT-binned V+γ samples needs the photon pT
+                    # column. LHEGammaPt only exists in the LHE-photon reskim (read via
+                    # --overlay-data-dir); older skims carry only the GenGammaPt proxy, and only
+                    # for ZGto2QG. Load per-dataset so we never request a missing column.
                     ds_load_cols = load_cols
-                    if setup.get("stitch_ptg", False) and "ZGto2QG" in dataset:
-                        ds_load_cols = load_cols + ["GenGammaPt"]
+                    if setup.get("stitch_ptg", False) and _ptg_bin(dataset) is not None:
+                        if from_overlay:
+                            ds_load_cols = load_cols + ["LHEGammaPt"]
+                        elif "ZGto2QG" in dataset:
+                            ds_load_cols = load_cols + ["GenGammaPt"]
 
                     tasks.append({"process": process,
                                 "dataset": dataset,
@@ -371,6 +393,12 @@ if __name__ == "__main__":
         help="Override the full path to the parquet directory for this year, "
              "e.g. /eos/uscms/store/group/lpchbbrun3/gmachado/Test_v15/2024 "
              "Skips the --tag-based path construction.",
+    )
+    parser.add_argument(
+        "--overlay-data-dir", action="append", default=None,
+        help="Parquet directory whose datasets take precedence over --data-dir/--tag "
+             "(repeatable, first match wins), e.g. a partial reskim such as "
+             "/eos/uscms/store/group/lpchbbrun3/gmachado/26Sep17_lhephoton_v15/2024",
     )
 
     args = parser.parse_args()

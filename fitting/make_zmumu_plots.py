@@ -37,7 +37,8 @@ import uproot
 
 from hbb import utils
 
-from cr_plotting import make_stack_plot, describe_df_weight, min_dr_photon_muon
+from cr_plotting import make_stack_plot, describe_df_weight
+from template_utils import _PTG_EDGES, _ptg_bin  # AN-23-206 App.H stitch windows
 
 hep.style.use("CMS")
 
@@ -106,48 +107,6 @@ DY_GROUPS_FLAVOR = {
 }
 
 # ---------------------------------------------------------------------------
-# For the mumu+GAMMA reference we want the DEDICATED Z(->ll)+gamma sample DYGto2LG
-# (the mumu analog of the Zgamma->bb region's ZGto2QG). Inclusive DYto2Mu under-models
-# hard-photon radiation (gives z_norm~2.9 artifact), so use DYGto2LG for consistency
-# with the Zgamma->bb side. PTG bins >=100 all pass the offline Photon0_pt>120 cut.
-#
-# We load TWO leptonic-DY components as SEPARATE stack entries so the
-# VGammaLep-vs-VJets_lep_NLO split is visible (group-meeting diagnostic):
-#   Zmm_Zgamma = VGammaLep    = DYGto2LG  (Z->ll + gamma, matrix-element photon)
-#   Zmm_DY     = VJets_lep_NLO = plain DYto2Mu (photons only from FSR/parton shower)
-# In the photon-selected category BOTH contribute -> the Z(mumu)+gamma phase space
-# is double-produced (overlap). Showing them separately quantifies that overlap;
-# the actual overlap removal (gen-photon veto on plain DY) is a later step.
-# NOTE: plain DY is PLOT-ONLY for now — it is intentionally NOT in
-# DATACARD_PROC_MAP, so --save-root still writes the DYGto2LG-only reference card.
-# Selected with --DY-comp dyg.
-# ---------------------------------------------------------------------------
-DY_GROUPS_DYG = {
-    "Zmm_Zgamma": {
-        "datasets": [
-            "DYGto2LG-1Jets_Bin-MLL-50-PTG-100",
-            "DYGto2LG-1Jets_Bin-MLL-50-PTG-200",
-            "DYGto2LG-1Jets_Bin-MLL-50-PTG-400",
-            "DYGto2LG-1Jets_Bin-MLL-50-PTG-600",
-        ],
-        "color": "#2471A3",
-        "label": r"Z($\mu\mu$)$\gamma$ (DYG, ME)",
-    },
-    # Plain Drell-Yan (VJets_lep_NLO). Jet-multiplicity-split muon channel only
-    # (0J/1J/2J) — do NOT also add the PTLL-binned DYto2L samples, that would
-    # double-count DY within this group (see note above).
-    "Zmm_DY": {
-        "datasets": [
-            "DYto2Mu-2Jets_MLL-50_0J",
-            "DYto2Mu-2Jets_MLL-50_1J",
-            "DYto2Mu-2Jets_MLL-50_2J",
-        ],
-        "color": "#AED6F1",
-        "label": r"Z($\mu\mu$) DY (FSR $\gamma$)",
-    },
-}
-
-# ---------------------------------------------------------------------------
 # Other MC processes — loaded via pmap_run3.json
 # ---------------------------------------------------------------------------
 OTHER_PROCESSES = {
@@ -163,8 +122,7 @@ OTHER_PROCESSES = {
 STACK_ORDER = [
     "Zgamma", "Wgamma", "VV", "singlet", "Wjets", "ttbar",
     "Zll_PTLL_600", "Zll_PTLL_400to600", "Zll_PTLL_200to400", "Zll_PTLL_100to200",
-    "Zll_DYto2Mu","Zll_DYto2E",
-    "Zmm_Zgamma", "Zmm_DY",
+    "Zll_DYto2Mu","Zll_DYto2E"
 ]
 
 # Combined style lookup
@@ -176,10 +134,6 @@ PROC_STYLE_FLAVOR: dict[str, dict] = {
     **{k: {"color": v["color"], "label": v["label"]} for k, v in DY_GROUPS_FLAVOR.items()},
     **OTHER_PROCESSES,
 }
-PROC_STYLE_DYG: dict[str, dict] = {
-    **{k: {"color": v["color"], "label": v["label"]} for k, v in DY_GROUPS_DYG.items()},
-    **OTHER_PROCESSES,
-}
 
 # ---------------------------------------------------------------------------
 # Columns to load from parquet
@@ -188,19 +142,13 @@ COLS = [
     "weight",
     "GenFlavor",
     "Zmm_MuonLead_pt",
-    "Zmm_MuonLead_eta",
     "Zmm_MuonLead_phi",
     "Zmm_MuonSublead_pt",
-    # NB: skim casing is inconsistent — pt is "Sublead", eta/phi are "SubLead"
-    # (see categorizer.py output_array_zmm). Match the parquet spelling exactly.
-    "Zmm_MuonSubLead_eta",
-    "Zmm_MuonSubLead_phi",
     "Zmm_MuonPair_mll",
     "Zmm_MuonPair_pt",
     "Zmm_ntightPhotons",
     "Zmm_nak8",
     "Photon0_pt",
-    "Photon0_eta",
     "Photon0_phi",
     "MET",
     "genWeight"
@@ -224,26 +172,36 @@ VARS_BOTH = [
 VARS_GAMMA = [
     ("Photon0_pt",        np.linspace(100, 600, 26), r"Photon $p_T$ [GeV]"),
     ("dphi_photon_muon",  np.linspace(0, np.pi, 32), r"$\Delta\phi(\gamma, \mu_\mathrm{lead})$"),
-    # Diagnostic for muon-FSR contamination: small ΔR = photon collinear with a
-    # muon (FSR); large ΔR = genuine wide-angle (ISR/prompt) Z+gamma topology.
-    ("dr_photon_muon",    np.linspace(0, 5, 26),     r"min $\Delta R(\gamma, \mu)$"),
 ]
 
 # ---------------------------------------------------------------------------
-# ROOT histogram export (for make_zmmcr_datacard.py)
+# mumu+gamma reference for the Z(mumu) CR datacard (PR #72)
+#   DYGto2LG = dedicated Z(->ll)+gamma (matrix-element photon), gen-stitched on
+#   LHEGammaPt in the datacard pipeline (template_utils). save_root_histograms
+#   writes the mll template consumed by make_zmmcr_datacard.py.
 # ---------------------------------------------------------------------------
-# Fit observable: mll in [60, 120] GeV with 30 bins (2 GeV/bin)
+DY_GROUPS_GAMMA = {
+    "Zmm_Zgamma": {
+        "datasets": [
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-100",
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-200",
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-400",
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-600",
+        ],
+        "color": "#2471A3",
+        "label": r"Z($\mu\mu$)$\gamma$ (DYG, ME)",
+    },
+}
+
 MLL_FIT_BINS = np.linspace(60, 120, 31)
 
-# Map plotter process names → datacard process names
-# All DY sub-groups are merged into a single "Zjets"
 DATACARD_PROC_MAP = {
-    "Muondata":          "data_obs",
-    "Zmm_Zgamma":        "Zjets",
-    "Wjets":             "Wjets",
-    "ttbar":             "ttbar",
-    "VV":                "VV",
-    "singlet":           "singlet",
+    "Muondata":   "data_obs",
+    "Zmm_Zgamma": "Zjets",
+    "Wjets":      "Wjets",
+    "ttbar":      "ttbar",
+    "VV":         "VV",
+    "singlet":    "singlet",
 }
 
 
@@ -252,17 +210,10 @@ def save_root_histograms(
     selection_mask: dict[str, pd.Series],
     year: str,
     outpath: Path,
-    proc_map: dict[str, str] = DATACARD_PROC_MAP,
 ) -> None:
-    """
-    Write mll histograms to a ROOT file in the format expected by
-    make_zmmcr_datacard.py:
-        zmmcr_inclusive_pt1_{proc}_nominal
-    """
-    # Accumulate sumw and sumw2 per datacard process
+    """Write mll histograms for make_zmmcr_datacard.py: zmmcr_inclusive_pt1_{proc}_nominal."""
     merged: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-
-    for plotter_proc, dc_proc in proc_map.items():
+    for plotter_proc, dc_proc in DATACARD_PROC_MAP.items():
         if plotter_proc not in all_events:
             continue
         df   = all_events[plotter_proc]
@@ -271,27 +222,23 @@ def save_root_histograms(
             df = df[mask]
         if df.empty:
             continue
-
         mll_vals = df["Zmm_MuonPair_mll"].values
         is_data  = "data" in plotter_proc.lower()
         weights  = np.ones(len(df)) if is_data else df["finalWeight"].astype(float).values
-
         sumw, _  = np.histogram(mll_vals, bins=MLL_FIT_BINS, weights=weights)
         sumw2, _ = np.histogram(mll_vals, bins=MLL_FIT_BINS, weights=weights ** 2)
-
         if dc_proc in merged:
             merged[dc_proc] = (merged[dc_proc][0] + sumw, merged[dc_proc][1] + sumw2)
         else:
             merged[dc_proc] = (sumw, sumw2)
-
     outpath.parent.mkdir(parents=True, exist_ok=True)
     with uproot.recreate(outpath) as f:
         for dc_proc, (sumw, sumw2) in merged.items():
             key = f"zmmcr_inclusive_pt1_{dc_proc}_nominal"
             f[key] = (sumw, MLL_FIT_BINS)
-            print(f"  [{dc_proc:12s}]  yield = {sumw.sum():.1f}  → {key}")
-
+            print(f"  [{dc_proc:12s}]  yield = {sumw.sum():.1f}  -> {key}")
     print(f"\n  ROOT file written: {outpath}")
+
 
 # ---------------------------------------------------------------------------
 # Main
@@ -312,15 +259,7 @@ def main(args: argparse.Namespace) -> None:
     print(f"\n=== Z(μμ) CR plots: {year}  [{data_dir}] ===\n")
 
     all_events: dict[str, pd.DataFrame] = {}
-    stack_order = STACK_ORDER
-    proc_map = DATACARD_PROC_MAP
-
-    # The DYG-specific options and the datacard export need the DYGto2LG grouping
-    if args.DY_comp != "dyg" and (args.dyg_bins or args.split_dyg_ptg or args.save_root):
-        print(f"  [DY-comp] --dyg-bins/--split-dyg-ptg/--save-root need DYGto2LG: "
-              f"switching --DY-comp {args.DY_comp} -> dyg")
-        args.DY_comp = "dyg"
-
+    
     if args.DY_comp == "flavor-binned":
         DY_GROUPS = DY_GROUPS_FLAVOR
         PROC_STYLE = PROC_STYLE_FLAVOR
@@ -330,62 +269,7 @@ def main(args: argparse.Namespace) -> None:
         DY_GROUPS = DY_GROUPS_PT
         PROC_STYLE = PROC_STYLE_PT
         outdir = Path(f"{args.outdir}/DY_pt/") 
-
-    elif args.DY_comp == "dyg":
-        DY_GROUPS = {k: dict(v) for k, v in DY_GROUPS_DYG.items()}
-        PROC_STYLE = PROC_STYLE_DYG
-        outdir = Path(f"{args.outdir}/DY_dyg/")
-
-        # --- Optional: restrict which DYGto2LG PTG bins go into the merged Z(μμ)γ ---
-        # e.g. --dyg-bins 100 -> use ONLY PTG-100 (the inclusive photon-pT>100 sample),
-        # to test whether the 4 samples are inclusive-above (stacking double-counts)
-        # vs exclusive bins. Ignored when --split-dyg-ptg is set.
-        if args.dyg_bins and not args.split_dyg_ptg:
-            bins = [b.strip() for b in args.dyg_bins.split(",") if b.strip()]
-            DY_GROUPS["Zmm_Zgamma"]["datasets"] = [
-                f"DYGto2LG-1Jets_Bin-MLL-50-PTG-{b}" for b in bins
-            ]
-            DY_GROUPS["Zmm_Zgamma"]["label"] = rf"Z($\mu\mu$)$\gamma$ (PTG-{'+'.join(bins)})"
-            PROC_STYLE = {
-                **{k: {"color": v["color"], "label": v["label"]} for k, v in DY_GROUPS.items()},
-                **OTHER_PROCESSES,
-            }
-            print(f"  [dyg-bins] merged Z(μμ)γ uses DYGto2LG PTG bins: {bins}")
-
-        # --- Optional: split DYGto2LG into its 4 PTG bins (stitching diagnostic) ---
-        # Each PTG bin gets its own color (dark->light blue ramp) so the Photon0_pt
-        # stack shows whether the bins tile cleanly at 100/200/400/600 with no
-        # gap or double-count at the boundaries. Plain DY recolored gray to stand
-        # apart from the ramp. All PTG bins still map to Zjets in the datacard.
-        if args.split_dyg_ptg:
-            ptgs = ["100", "200", "400", "600"]
-            ramp = ["#08306B", "#2171B5", "#6BAED6", "#C6DBEF"]
-            new_groups = {
-                f"Zmm_DYG_PTG{p}": {
-                    "datasets": [f"DYGto2LG-1Jets_Bin-MLL-50-PTG-{p}"],
-                    "color": col,
-                    "label": rf"DYG PTG-{p}",
-                }
-                for p, col in zip(ptgs, ramp)
-            }
-            new_groups["Zmm_DY"] = {**DY_GROUPS["Zmm_DY"], "color": "#95A5A6"}
-            DY_GROUPS = new_groups
-            dyg_keys = [f"Zmm_DYG_PTG{p}" for p in ptgs]
-            stack_order = (
-                ["Zgamma", "Wgamma", "VV", "singlet", "Wjets", "ttbar"]
-                + dyg_keys + ["Zmm_DY"]
-            )
-            PROC_STYLE = {
-                **{k: {"color": v["color"], "label": v["label"]} for k, v in DY_GROUPS.items()},
-                **OTHER_PROCESSES,
-            }
-            proc_map = {
-                "Muondata": "data_obs",
-                **{k: "Zjets" for k in dyg_keys},
-                "Wjets": "Wjets", "ttbar": "ttbar", "VV": "VV", "singlet": "singlet",
-            }
-            print("  [split-dyg-ptg] DYGto2LG split into 4 PTG-bin components")
-
+        
 
     # --- Load DY pT-bin sub-groups (inline dataset lists) ---
     for proc, info in DY_GROUPS.items():
@@ -402,6 +286,42 @@ def main(args: argparse.Namespace) -> None:
             print(f"  Loaded {proc}: {len(loaded[proc]):,} events")
         else:
             print(f"  [skip] {proc}: no parquets found")
+
+    # --- Also load DYGto2LG (Zmm_Zgamma) for the mumu+gamma datacard reference (PR #72) ---
+    # AN-23-206 App.H stitch: load each inclusive-above PTG bin separately and keep only
+    # events whose LHE photon pT falls in that bin's window, so the bins don't multi-count
+    # (mirrors the stitch in template_utils used by the make_datacards zmmcr path).
+    if args.save_root or args.gamma:
+        gamma_data_dir = Path(args.gamma_data_dir) if args.gamma_data_dir else data_dir
+        for proc, info in DY_GROUPS_GAMMA.items():
+            pieces = []
+            for ds in info["datasets"]:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    loaded = utils.load_samples(
+                        data_dir=gamma_data_dir,
+                        samples={proc: [ds]},
+                        columns=COLS + ["LHEGammaPt"],
+                        region=region,
+                    )
+                if not (loaded and proc in loaded and not loaded[proc].empty):
+                    print(f"  [skip] {ds}: no parquets found")
+                    continue
+                df = loaded[proc]
+                ptg = _ptg_bin(ds)
+                if ptg is not None and "LHEGammaPt" in df.columns:
+                    lo, hi = _PTG_EDGES[ptg]
+                    gpt = df["LHEGammaPt"].astype(float)
+                    df = df[(gpt >= lo) & (gpt < hi)]
+                    print(f"  Stitched {ds}: {len(df):,} events in LHE gamma pT [{lo:.0f},{hi:.0f})")
+                else:
+                    print(f"  [warn] {ds}: no LHEGammaPt / not a PTG bin -> UNSTITCHED")
+                pieces.append(df)
+            if pieces:
+                all_events[proc] = pd.concat(pieces, ignore_index=True)
+                print(f"  Loaded {proc} (stitched): {len(all_events[proc]):,} events")
+            else:
+                print(f"  [skip] {proc}: no parquets found")
 
     # --- Load other MC + data via pmap ---
     with open(Path(__file__).parent / "pmap_run3.json") as f:
@@ -441,26 +361,15 @@ def main(args: argparse.Namespace) -> None:
             has_photon = df["Zmm_ntightPhotons"] >= 1
             if "Photon0_pt" in df.columns:
                 has_photon = has_photon & (df["Photon0_pt"] > PHOTON_PT_CUT)
-            # Optional photon-muon separation cut: removes muon-FSR photons
-            # (photon collinear with a muon), biasing toward the genuine
-            # wide-angle Z+gamma topology. NaN ΔR (no photon) -> comparison
-            # is False, which is fine since those events fail has_photon anyway.
-            if args.dr_gamma_mu is not None:
-                mindr = min_dr_photon_muon(df)
-                has_photon = has_photon & (mindr > args.dr_gamma_mu)
             gamma_mask[proc] = has_photon
         else:
             no_photon_mask[proc] = pd.Series(True, index=df.index)
             gamma_mask[proc] = pd.Series(False, index=df.index)
 
-    if args.dr_gamma_mu is not None:
-        print(f"  [gamma cut] min ΔR(γ, μ) > {args.dr_gamma_mu} applied")
-
-    # --- Save ROOT histograms for datacard ---
+    # --- Save ROOT histograms for the Z(mumu) CR datacard (PR #72) ---
     if args.save_root:
         root_outdir = Path(args.outdir_root) if args.outdir_root else outdir / "root"
         if args.gamma:
-            # mumu+gamma (Zgamma->mumu) selection: same production as Zgamma->bb
             root_mask = gamma_mask
             root_path = root_outdir / f"fitting_{year}_zmmcr_gamma_mll.root"
             sel_label = "mumu+gamma (>=1 tight photon, Photon0_pt>120)"
@@ -469,7 +378,7 @@ def main(args: argparse.Namespace) -> None:
             root_path = root_outdir / f"fitting_{year}_zmmcr_mll.root"
             sel_label = "no-photon (plain DY)"
         print(f"\n--- Saving ROOT histograms ({year}) [{sel_label}] ---")
-        save_root_histograms(all_events, root_mask, year, root_path, proc_map)
+        save_root_histograms(all_events, root_mask, year, root_path)
 
     if args.debug:
         print("-------------------------------------")
@@ -493,7 +402,7 @@ def main(args: argparse.Namespace) -> None:
         outpath.parent.mkdir(parents=True, exist_ok=True)
         make_stack_plot(
             all_events, no_photon_mask, var, bins, region_label, xlabel,
-            year, outpath, stack_order, PROC_STYLE
+            year, outpath, STACK_ORDER, PROC_STYLE
         )
 
     # --- Gamma category ---
@@ -503,7 +412,7 @@ def main(args: argparse.Namespace) -> None:
         outpath = outdir / year / f"zmumu_gamma_{var}.png"
         make_stack_plot(
             all_events, gamma_mask, var, bins, region_label, xlabel,
-            year, outpath, stack_order, PROC_STYLE
+            year, outpath, STACK_ORDER, PROC_STYLE
         )
 
     print(f"\nDone. Plots in: {outdir / year}/")
@@ -516,11 +425,10 @@ if __name__ == "__main__":
     parser.add_argument("--tag",     required=True, help="Skim tag, e.g. Test_v15")
     parser.add_argument(
         "--DY-comp",
-        help="Which Drell-Yan process groups to plot: flavor-binned, pt-binned, "
-             "or dyg (DYGto2LG Z(μμ)γ + plain DYto2Mu, used for the datacard export)",
+        help="Which Drell-Yan process groups to plot: flavor-binned or pt-binned",
         type=str,
         default="flavor-binned",
-        choices=["flavor-binned", "pt-binned", "dyg"],
+        choices=["flavor-binned", "pt-binned"],
     )
     parser.add_argument("--outdir",  default="plots/zmumu/", help="Output directory")
     parser.add_argument("--debug", action="store_true", help="Enter debug mode")
@@ -536,37 +444,23 @@ if __name__ == "__main__":
              "Overrides --tag and --personal-path.",
     )
     parser.add_argument(
+        "--gamma-data-dir",
+        default=None,
+        help="Parquet directory for the DYGto2LG (mumu+gamma) samples, e.g. the LHE-photon "
+             "reskim .../gmachado/26Sep17_lhephoton_v15/2024. Defaults to the main data dir.",
+    )
+    parser.add_argument(
         "--save-root", action="store_true",
-        help="Also write mll ROOT histograms for make_zmmcr_datacard.py (implies --DY-comp dyg)",
-    )
-    parser.add_argument(
-        "--outdir-root", default=None,
-        help="Directory for ROOT output (default: <outdir>/root/)",
-    )
-    parser.add_argument(
-        "--dyg-bins", type=str, default=None,
-        help="Comma-separated DYGto2LG PTG bins to use in the merged Z(μμ)γ, "
-             "e.g. '100' for PTG-100 only, or '100,200,400,600' (default = all four). "
-             "Ignored if --split-dyg-ptg is set. Implies --DY-comp dyg.",
-    )
-    parser.add_argument(
-        "--split-dyg-ptg", action="store_true",
-        help="Split DYGto2LG into its 4 PTG bins (100/200/400/600), each its own "
-             "color, to check the photon-pT stitching. Default: merged as one Z(μμ)γ. "
-             "Implies --DY-comp dyg.",
-    )
-    parser.add_argument(
-        "--dr-gamma-mu", type=float, default=None,
-        help="If set, require min ΔR(photon, muon) > this value in the gamma "
-             "category (removes muon-FSR photons). Default: no ΔR cut. Use the "
-             "'min ΔR(γ, μ)' diagnostic plot to choose a threshold (e.g. 0.4).",
+        help="Write the Z(mumu) CR mll ROOT template for make_zmmcr_datacard.py.",
     )
     parser.add_argument(
         "--gamma", action="store_true",
-        help="Save the datacard ROOT using the mumu+gamma (>=1 tight photon, "
-             "Photon0_pt>120) selection instead of the no-photon one. This makes "
-             "the Z->mumu CR the SAME production (Zgamma) as the Z+gamma->bb signal, "
-             "so z_norm absorbs the Zgamma normalization (see METHOD_NOTE_tagsf.md §4b).",
+        help="Use the mumu+gamma selection (DYGto2LG reference) for --save-root "
+             "instead of the no-photon plain-DY selection.",
+    )
+    parser.add_argument(
+        "--outdir-root", default=None,
+        help="Directory for the --save-root output (default: <outdir>/root).",
     )
     args = parser.parse_args()
     main(args)
