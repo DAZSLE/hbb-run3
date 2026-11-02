@@ -8,16 +8,25 @@
     "use_modified_disc": true,
     "use_regressed_mass": true,
     "do_systematics": true,
-    "active_systematics": ["VJets"],
-    "jmsr_scale": 7,
-    "jmsr_smear": 0.5,
-    "jmsr_processes": ["zgammabb", "zgammacc"],
+    "active_systematics": ["JMSunconstrained", "JMRunconstrained", "VJets"],
+    "jmsr_mode": "event",
+    "jmsr_event": {
+        "_doc": "m' = m*JMS*(1+z*sqrt(JMR^2-1)*sigma/m), z~N(0,1) per event (Duarte gist). sigma = std of the Z->bb generic-mass template (pass_bb, 2024). 1 sigma: JMS 1% (~0.9 GeV), JMR 10%.",
+        "jms": 1.0,
+        "jmr": 1.0,
+        "jms_unc": 0.01,
+        "jmr_unc": 0.1,
+        "sigma": 10.0,
+        "seed": 42
+    },
+    "jmsr_nuis_range": 10,
+    "jmsr_processes": ["zgammabb", "zgammacc", "wgammacs"],
     "rho_scaling_max": -1.0,
     "samples_qq": ["Wjets", "Zjets", "Wgamma", "Zgamma", "TTGamma"],
 
     "observable": {
         "name": "regmass",
-        "branch_name": "FatJet0_ParTmassX2p",
+        "branch_name": "FatJet0_ParTmassGeneric",
         "min": 60,
         "max": 220,
         "nbins": 20
