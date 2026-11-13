@@ -12,11 +12,13 @@ import argparse
 import json
 from pathlib import Path
 from datetime import datetime
+import getpass
 import os
 import subprocess
 
-from dask.distributed import Client, as_completed
-from lpcjobqueue import LPCCondorCluster
+# NOTE: dask.distributed / lpcjobqueue are imported lazily inside main() (only for
+# the dask path) so that --serial can run in the plain hbb env (no dask installed),
+# where the /eos/uscms FUSE mount IS visible (it is NOT inside the coffea-dask container).
 
 from template_utils import (
     REGION_MAP,
@@ -28,7 +30,9 @@ from template_utils import (
     Zjets_thsysts,
     Wjets_thsysts,
     eos_exists,
-    fill_binned_histogram
+    fill_binned_histogram,
+    _ptg_bin,
+    jmsr_event_mode,
 )
 
 def set_xrootd_env():
@@ -57,7 +61,9 @@ def submit_task(process, dataset, data_dir, load_cols, region, region_key, varia
         filters=pq_filters,
         load_sys_sumweights=do_loadsys_sumw,
         scalevar_structure=scalevar_structure,
-        local_search_transfer=True
+        # dask workers have no /eos/uscms FUSE mount -> xrdcp the parquets locally;
+        # --serial runs in-process where the FUSE path is readable
+        local_search_transfer=not getattr(args, "serial", False),
     )
 
     if events:
@@ -68,7 +74,8 @@ def submit_task(process, dataset, data_dir, load_cols, region, region_key, varia
             args,
             systs=syst,
             template_outfile_path=template_outfile,
-            plotting_outfile_path=plotting_outfile
+            plotting_outfile_path=plotting_outfile,
+            dataset=dataset,
         )
 
     redirector = "root://cmseos.fnal.gov/"
@@ -140,7 +147,7 @@ def main(args):
         pq_filters = [
             ("FatJet0_msd", ">=", float(setup["observable"]["min"])),
             ("FatJet0_msd", "<=", float(setup["observable"]["max"])),
-            ("FatJet0_pt",  ">=", float(450.)),
+            ("FatJet0_pt",  ">=", float(setup.get("pt_min_scale", 450.))),
             ("FatJet0_pt",  "<=", float(1200.)),
         ]
 
@@ -166,7 +173,9 @@ def main(args):
         col_systs = []
         if setup.get("do_systematics"):
             active_syst = setup.get("active_systematics", [])
-            col_systs = [f"{s}{var}" for s in active_syst if s not in folder_systs and s not in ["pdf_Higgs", "QCDScale", "VJets"] and s not in year_systs for var in ("Up", "Down")]
+            # JMS/JMR are not weight columns: morph mode builds them in make_datacards,
+            # event mode (jmsr_mode "event") varies the mass in fill_binned_histogram
+            col_systs = [f"{s}{var}" for s in active_syst if s not in folder_systs and s not in ["pdf_Higgs", "QCDScale", "VJets"] and s not in year_systs and not s.startswith(("JMS", "JMR")) for var in ("Up", "Down")]
             col_systs.extend([f"{s}_{args.year}{var}" for s in active_syst if s in year_systs for var in ("Up", "Down")])
             do_folder_systs = ["nominal"] + [f"{s}{var}" for s in active_syst if s in folder_systs for var in ("Up", "Down")]
 
@@ -185,6 +194,8 @@ def main(args):
                 do_loadsys_sumw = False
                 if setup.get("do_systematics") and not isRealData:
                     col_systs_proc, syst_loop = col_systs.copy(), col_systs.copy()
+                    if jmsr_event_mode(setup):
+                        syst_loop.extend([f"{s}{var}" for s in active_syst if s.startswith(("JMS", "JMR")) for var in ("Up", "Down")])
                     if process in scalevar_process:
                         do_loadsys_sumw = True
                         if "pdf_Higgs" in active_syst:
@@ -220,6 +231,15 @@ def main(args):
                     region = REGION_MAP[region_key] if not do_BDT_regions or "cr" in region_key else f"{REGION_MAP[region_key]}-BDT"
                     search_path = Path(data_dir / dataset /  "parquet" / variation / region)
 
+                    # a dataset present in an overlay dir (e.g. a partial reskim) is read from there
+                    from_overlay = False
+                    for overlay in args.overlay_data_dir or []:
+                        overlay_path = Path(overlay) / dataset / "parquet" / variation / region
+                        if eos_exists(str(overlay_path).replace("/eos/uscms", "")):
+                            data_dir, search_path = Path(overlay), overlay_path
+                            from_overlay = True
+                            break
+
                     if not eos_exists(str(search_path).replace("/eos/uscms", "")):
                         if args.debug:
                             print("DOESN'T EXIST: ", search_path)
@@ -231,14 +251,25 @@ def main(args):
 
                     template_db = f"fitting_{args.year}_{region}_{process}_{dataset}_{variation}_{obs_name}_shelved"
                     plotting_db = f"plotting_{args.year}_{region}_{process}_{dataset}_{variation}_{obs_name}_shelved"
-                    tmp_eos_output = f"/store/group/lpchbbrun3/{os.getlogin()}"
+                    tmp_eos_output = f"/store/group/lpchbbrun3/{getpass.getuser()}"
                     if args.debug:
                         print(template_db)
 
-                    tasks.append({"process": process, 
-                                "dataset": dataset, 
+                    # AN-23-206 stitching of the photon-pT-binned V+γ samples needs the photon pT
+                    # column. LHEGammaPt only exists in the LHE-photon reskim (read via
+                    # --overlay-data-dir); older skims carry only the GenGammaPt proxy, and only
+                    # for ZGto2QG. Load per-dataset so we never request a missing column.
+                    ds_load_cols = load_cols
+                    if setup.get("stitch_ptg", False) and _ptg_bin(dataset) is not None:
+                        if from_overlay:
+                            ds_load_cols = load_cols + ["LHEGammaPt"]
+                        elif "ZGto2QG" in dataset:
+                            ds_load_cols = load_cols + ["GenGammaPt"]
+
+                    tasks.append({"process": process,
+                                "dataset": dataset,
                                 "data_dir": data_dir,
-                                "load_cols" : load_cols, 
+                                "load_cols" : ds_load_cols,
                                 "region" : region, 
                                 "region_key" : region_key, 
                                 "variation" : variation, 
@@ -254,13 +285,42 @@ def main(args):
                                 })
 
     print(f"|{datetime.now()}| Number of tasks to submit: {len(tasks)}")
+
+    if getattr(args, "serial", False):
+        # Run tasks in-process (container main), bypassing dask workers.
+        # Use when the condor dask workers can't read EOS (tasks "succeed" but
+        # load_samples returns empty -> no templates written). Slower but reliable.
+        print(f"|{datetime.now()}| SERIAL mode (no dask) — running {len(tasks)} tasks in-process")
+        # submit_task does a bare `import utils`; in the dask path utils.py is shipped
+        # to the worker cwd via transfer_input_files. In-process we must put src/hbb on
+        # the path so that bare import resolves to src/hbb/utils.py.
+        import sys
+        _hbb_dir = str(Path(__file__).resolve().parent.parent / "src" / "hbb")
+        if _hbb_dir not in sys.path:
+            sys.path.insert(0, _hbb_dir)
+        n_done = n_failed = 0
+        for task in tasks:
+            try:
+                submit_task(**task)
+                n_done += 1
+            except Exception as exc:
+                n_failed += 1
+                print(f"Task FAILED: {task.get('dataset')} -> {exc!r}")
+            if (n_done + n_failed) % 10 == 0:
+                print(f"|{datetime.now()}| {n_done + n_failed}/{len(tasks)} (ok={n_done} fail={n_failed})")
+        print(f"|{datetime.now()}| SERIAL done: {n_done} ok, {n_failed} failed")
+        print(f"|{datetime.now()}| Next: python collect_hists.py --year {args.year} --tag {args.tag} --outdir {args.outdir} --save-templates")
+        return
+
+    from dask.distributed import Client, as_completed
+    from lpcjobqueue import LPCCondorCluster
     cluster = LPCCondorCluster(
          transfer_input_files=[
              "../.env", 
              "../src/hbb/utils.py",
              "template_utils.py"
              ],
-        log_directory=f"/uscmst1b_scratch/lpc1/3DayLifetime/lzygala",
+        log_directory=f"/uscmst1b_scratch/lpc1/3DayLifetime/{os.environ['USER']}",
         memory="14GB",  # Necessary for some 2024 QCD datasets, can get away with smaller for other years
         # job_script_prologue=[]
     )
@@ -325,11 +385,20 @@ if __name__ == "__main__":
     parser.add_argument("--save-templates", action="store_true", help="Actually write the ROOT file")
     parser.add_argument("--save-plotting-pkl", action="store_true", help="Actually write the PKL file")
     parser.add_argument("--debug", action="store_true", help="Enter debug mode")
+    parser.add_argument("--serial", action="store_true",
+                        help="Run tasks in-process (no dask workers). Use when condor "
+                             "dask workers can't read EOS. Slower but reliable.")
     parser.add_argument(
         "--data-dir", default=None,
         help="Override the full path to the parquet directory for this year, "
              "e.g. /eos/uscms/store/group/lpchbbrun3/gmachado/Test_v15/2024 "
              "Skips the --tag-based path construction.",
+    )
+    parser.add_argument(
+        "--overlay-data-dir", action="append", default=None,
+        help="Parquet directory whose datasets take precedence over --data-dir/--tag "
+             "(repeatable, first match wins), e.g. a partial reskim such as "
+             "/eos/uscms/store/group/lpchbbrun3/gmachado/26Sep17_lhephoton_v15/2024",
     )
 
     args = parser.parse_args()

@@ -10,9 +10,70 @@ import uproot
 import pickle
 import hist
 import gc
+import re
 import shelve
 from pathlib import Path
 import subprocess
+import zlib
+
+# --- AN-23-206 App.H stitching of NLO photon-pT-binned V+γ samples ---------
+# The 2024 "Bin-...-PTG-{100,200,400,600}" samples are INCLUSIVE-above (min-pT
+# cut, no max) so stacking them multi-counts. Make each exclusive by keeping
+# only events whose photon pT falls in that bin's window (AN-23-206 Appendix H).
+#
+# Stitching variable = the LHE-level photon pT ("LHEGammaPt"), the quantity the
+# gridpack pT binning is applied on (AN-23-206 App.H). The post-shower "GenGammaPt"
+# is only a proxy (it leaks across the bin boundaries) and is used as a fallback for
+# older skims that predate the LHEGammaPt column (see the 26Sep17_lhephoton_v15 reskim).
+#
+# ALL four V+γ families are gen-stitched now that LHEGammaPt is stored for each:
+#   ZGto2QG (bb), WGto2QG (cs), DYGto2LG (μμ), WGtoLNuG (W+γ). Their fully-inclusive
+# members are dropped when present. (Earlier only ZGto2QG was stitched; WGto2QG/
+# WGtoLNuG kept the inclusive member and DYGto2LG used PTG-100 only — all superseded.)
+# Gated by setup flag "stitch_ptg".
+_PTG_EDGES = {"100": (100.0, 200.0), "200": (200.0, 400.0),
+              "400": (400.0, 600.0), "600": (600.0, np.inf)}
+# photon-pT stitching variable, in order of preference (LHE first, gen proxy fallback)
+_STITCH_VARS = ("LHEGammaPt", "GenGammaPt")
+# datasets to DROP entirely when stitching (fully-inclusive, replaced by stitched bins).
+# DYGto2LG has no fully-inclusive member (only Bin-MLL-50-PTG-N), so nothing to drop there.
+_STITCH_DROP_INCLUSIVE = {"ZGto2QG-1Jets", "WGto2QG-1Jets", "WGtoLNuG-1Jets"}
+
+# --- Event-by-event JMS/JMR (J. Duarte's HistSmear gist) --------------------
+#   m' = m * JMS * (1 + z * sqrt(JMR^2 - 1) * sigma / m),   z ~ N(0,1) per event
+# (= MorphHistW2.get(shift=(JMS-1)*mean, smear=JMR) on the histogram). z is drawn
+# once per event and shared by nominal and all JMS/JMR variations. JMR < 1 cannot
+# be reached by smearing -> no smear (the datacard mirrors JMR down in that case).
+# Gated by setup "jmsr_mode": "event"; parameters in setup "jmsr_event".
+_JMSR_KEYS = ("JMS", "JMR")
+
+
+def jmsr_event_mode(setup):
+    return setup.get("jmsr_mode", "morph") == "event"
+
+
+def jmsr_smear_mass(mass, z, jms, jmr, sigma):
+    k = np.sqrt(max(jmr * jmr - 1.0, 0.0))
+    return jms * (mass + z * k * sigma)
+
+
+def jmsr_params(cfg, in_syst):
+    """(JMS, JMR) for a variation name, e.g. 'JMSunconstrainedUp' -> (jms + jms_unc, jmr)."""
+    jms, jmr = cfg.get("jms", 1.0), cfg.get("jmr", 1.0)
+    if in_syst.startswith(_JMSR_KEYS) and in_syst.endswith(("Up", "Down")):
+        sign = 1.0 if in_syst.endswith("Up") else -1.0
+        if in_syst.startswith("JMS"):
+            jms += sign * cfg.get("jms_unc", 0.01)
+        else:
+            jmr += sign * cfg.get("jmr_unc", 0.1)
+    return jms, jmr
+
+
+
+def _ptg_bin(dataset):
+    """Return '100'/'200'/'400'/'600' for a 2024 Bin-...-PTG-N sample, else None."""
+    m = re.search(r"Bin-(?:MLL-50-)?PTG-(100|200|400|600)$", dataset)
+    return m.group(1) if m else None
 
 
 # --- REGION DIRECTORY MAPPING ---
@@ -218,7 +279,8 @@ def eos_exists(path):
     return result.returncode == 0
 
 def fill_binned_histogram(
-    events, region_key, setup, args, systs=["nominal"], template_outfile_path="", plotting_outfile_path=""
+    events, region_key, setup, args, systs=["nominal"], template_outfile_path="", plotting_outfile_path="",
+    dataset="",
 ):
     samples_qq = setup.get("samples_qq", [])
     
@@ -261,14 +323,33 @@ def fill_binned_histogram(
             dphi_raw = np.abs(data["Photon0_phi"] - data["FatJet0_phi"])
             dphi = np.where(dphi_raw > np.pi, 2 * np.pi - dphi_raw, dphi_raw)
 
-        var_series = dphi if var_col == "delta_phi_photon_jet" else data[var_col]
+        if setup.get("use_regressed_mass", False):
+            # regressed-mass flavour comes from the setup (ParTmassX2p or ParTmassGeneric)
+            var_series = data[var_col]
+        elif var_col == "delta_phi_photon_jet":
+            var_series = dphi
+        else:
+            var_series = data[var_col]
 
         genflavordata = (
             np.zeros(len(data), dtype=np.int8) if is_data else data["GenFlavor"].astype(np.int8)
         )
 
+        # event-by-event JMS/JMR: the observable window is applied per variation below
+        jmsr_cfg = setup.get("jmsr_event", {})
+        apply_jmsr = (
+            jmsr_event_mode(setup) and not is_data
+            and any(p in process_name for p in jmsr_cfg.get("processes", samples_qq))
+        )
+        if apply_jmsr:
+            seed = [jmsr_cfg.get("seed", 42), zlib.crc32(f"{dataset}|{process_name}".encode()), len(data)]
+            jmsr_z = np.random.default_rng(seed).standard_normal(len(data))
+            raw_mass = var_series.to_numpy(dtype=float)
+
         # --- SELECTION LOGIC ---
         basic_cuts = (var_series > obs["min"]) & (var_series < obs["max"])
+        if apply_jmsr:
+            basic_cuts = var_series.notna()
 
         pre_selection = basic_cuts & (pt > pt_min)  #signal categories
         if "zgcr" in region_key:
@@ -280,28 +361,65 @@ def fill_binned_histogram(
             # Z(mumu) CR: observable is mll, bin variable is dimuon pair pt
             pre_selection = basic_cuts & (data[bin_branch] > pt_min)
 
+        # --- AN-23-206 App.H stitching of photon-pT-binned V+γ samples ---
+        if setup.get("stitch_ptg", False) and not is_data:
+            ptg = _ptg_bin(dataset)
+            if ptg is not None:
+                # prefer the LHE-level photon pT; fall back to the GenGammaPt proxy
+                stitch_col = next((c for c in _STITCH_VARS if c in data.columns), None)
+                if stitch_col is not None:
+                    # keep only events whose photon pT falls in this bin's window.
+                    # (window lo >= 100, so the LHEGammaPt=-1 no-photon sentinel is excluded)
+                    lo, hi = _PTG_EDGES[ptg]
+                    gpt = data[stitch_col].astype(float)
+                    pre_selection = pre_selection & (gpt >= lo) & (gpt < hi)
+                else:
+                    # binned sample with no stitch variable at all (pre-reskim skim)
+                    # -> cannot stitch -> drop it, rely on the inclusive member
+                    continue
+            elif dataset in _STITCH_DROP_INCLUSIVE:
+                # fully-inclusive member replaced by the gen-stitched binned set -> drop
+                continue
+
         if "zmmcr" in region_key:
             # Only inclusive category for zmumu CR — no Txbb pass/fail
             selection_dict = {"inclusive": pre_selection}
         else:
-            Txcc = data["FatJet0_ParTPXccVsQCD"]
-            Txbb = data["FatJet0_ParTPXbbVsQCD"]
             if setup.get("use_modified_disc", False):
-                # Modified discriminant: (Xbb+Xcc) / (Xbb+Xcc+QCD+Xcs)
-                # Penalises W→cs events in the denominator
+                # All three discriminants use the same 4-body denominator
+                # (Xbb + Xcc + QCD + Xcs), following Cristina's definitions
                 _num = data["FatJet0_ParTPXbb"] + data["FatJet0_ParTPXcc"]
                 _den = (_num + data["FatJet0_ParTPQCD"] + data["FatJet0_ParTPXcs"]).replace(0, np.nan)
                 Txbbxcc = (_num / _den).fillna(0.0)
+                Txbb = (data["FatJet0_ParTPXbb"] / _den).fillna(0.0)
+                Txcc = (data["FatJet0_ParTPXcc"] / _den).fillna(0.0)
             else:
                 Txbbxcc = data["FatJet0_ParTPXbbXcc"]
+                Txbb = data["FatJet0_ParTPXbbVsQCD"]
+                Txcc = data["FatJet0_ParTPXccVsQCD"]
 
-            selection_dict = {
-                "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
-                "pass_cc": pre_selection & (Txbbxcc > working_point) & (Txcc > Txbb),
-                "fail": pre_selection & (Txbbxcc <= working_point),
-                "pass": pre_selection & (Txbbxcc > working_point),
-                "inclusive": pre_selection,
-            }
+            disc_mode = setup.get("disc_mode", "xbbxcc")
+            if disc_mode == "bbvsqcd":
+                # Reproduce Raffaele Gerosa's boosted Z->bb calibration selection:
+                # single-sided cut on p(X->bb) vs QCD (Txbb), bb-only (no cc split).
+                # VHP=0.99, HP=[0.975,0.99], MP=[0.95,0.975]; pass here = > working_point.
+                # Pair with use_modified_disc:false (so Txbb = raw FatJet0_ParTPXbbVsQCD)
+                # and regions_to_fit:["bb"].
+                pass_sel = Txbb > working_point
+                selection_dict = {
+                    "pass_bb": pre_selection & pass_sel,
+                    "fail": pre_selection & ~pass_sel,
+                    "pass": pre_selection & pass_sel,
+                    "inclusive": pre_selection,
+                }
+            else:
+                selection_dict = {
+                    "pass_bb": pre_selection & (Txbbxcc > working_point) & (Txbb > Txcc),
+                    "pass_cc": pre_selection & (Txbbxcc > working_point) & (Txcc > Txbb),
+                    "fail": pre_selection & (Txbbxcc <= working_point),
+                    "pass": pre_selection & (Txbbxcc > working_point),
+                    "inclusive": pre_selection,
+                }
 
         flavor_cuts = {
             "": ((genflavordata == 1) | (genflavordata == 2)),
@@ -324,6 +442,13 @@ def fill_binned_histogram(
                 # load_samples already calculated finalWeight (weight / sum_genWeight)
                 weight_val = data["finalWeight"].astype(float)
 
+            mass_s, window = var_series, True
+            if apply_jmsr:
+                jms, jmr = jmsr_params(jmsr_cfg, in_syst)
+                mass_s = var_series.copy()
+                mass_s[:] = jmsr_smear_mass(raw_mass, jmsr_z, jms, jmr, jmsr_cfg.get("sigma", 10.0))
+                window = (mass_s > obs["min"]) & (mass_s < obs["max"])
+
             # --- FILLING ---
             def fill_h(name, sel, cat, flag_template=False):
                 factor = perform_analysis(data, sel, weight_val, in_syst) if is_analysis_syst else np.ones_like(data[bin_branch][sel])
@@ -333,7 +458,7 @@ def fill_binned_histogram(
                 if flag_template:
                     h_template = hist.Hist(axis_var, storage=hist.storage.Weight())
                     h_template.fill(
-                        var_series[sel],
+                        mass_s[sel],
                         weight=weight_val[sel] * factor,
                     )
                     export_h_to_shelve(h_template, name, template_outfile_path)
@@ -342,7 +467,7 @@ def fill_binned_histogram(
 
                 else:
                     h_plotting.fill(
-                        var_series[sel],
+                        mass_s[sel],
                         data[bin_branch][sel],  # using dynamic bin data here
                         category=cat,
                         genflavor=genflavordata[sel],
@@ -350,6 +475,7 @@ def fill_binned_histogram(
                     )
 
             for category, selection in selection_dict.items():
+                selection = selection & window
                 if args.save_plotting_pkl:
                     if category in axis_cat:
                         fill_h(f"{process_name}|{region_key}|{in_syst}", selection, category)

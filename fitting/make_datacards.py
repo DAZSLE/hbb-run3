@@ -93,6 +93,11 @@ def rhalphabet(args):
     # broaden/narrow the distribution by JMSR_SMEAR fraction
     JMSR_SMEAR = config.get("jmsr_smear", 0.1)  # read from JSON or hardcode
     jmsr_processes = config.get("jmsr_processes", [])  # e.g. ["zgammabb"] in JSON
+    jmsr_nuis_cache = {}  # per-flavor JMS/JMR nuisances when jmsr_decorrelate
+    # "event": JMS/JMR up/down templates were filled event-by-event (template_utils) instead of morphed here
+    jmsr_event = config.get("jmsr_mode", "morph") == "event"
+    jmsr_cfg = config.get("jmsr_event", {})
+    JMSR_RANGE = config.get("jmsr_nuis_range", 5)
 
     # ---------------------------------------------------------
     # 3. OBSERVABLES & SYSTEMATICS
@@ -134,8 +139,8 @@ def rhalphabet(args):
             "btagSFb_correlated": rl.NuisanceParameter(f"CMS_btagSFb_correlated_{year}", "lnN"),
             "btagSFc_correlated": rl.NuisanceParameter(f"CMS_btagSFc_correlated_{year}", "lnN"),
             "btagSFlight_correlated": rl.NuisanceParameter(f"CMS_btagSFlight_correlated_{year}", "lnN"),
-            "JMSunconstrained": rl.NuisanceParameter(f"CMS_jms_{year}", "shapeU", lo=-5, hi=5),
-            "JMRunconstrained": rl.NuisanceParameter(f"CMS_jmr_{year}", "shapeU", lo=-5, hi=5),
+            "JMSunconstrained": rl.NuisanceParameter(f"CMS_jms_{year}", "shapeU", lo=-JMSR_RANGE, hi=JMSR_RANGE),
+            "JMRunconstrained": rl.NuisanceParameter(f"CMS_jmr_{year}", "shapeU", lo=-JMSR_RANGE, hi=JMSR_RANGE),
             "JMS": rl.NuisanceParameter(f"CMS_jms_{year}", "shape"),
             "JMR": rl.NuisanceParameter(f"CMS_jmr_{year}", "shape"),
         }
@@ -454,7 +459,26 @@ def rhalphabet(args):
                                 k: v for k, v in syst_map.items() if k.startswith(("JMS", "JMR"))
                             }
 
-                            if proc_name in jmsr_processes:
+                            if proc_name in jmsr_processes and jmsr_event:
+                                # Up/down templates were filled event-by-event; read them from the ROOT file.
+                                # JMR below 1 can't be reached by smearing -> mirror the down around nominal.
+                                def _jmsr_tpl(s_name):
+                                    return get_merged_template(
+                                        infile_path, info["components"], region, binindex + 1, cat, msd, syst=s_name
+                                    )[0]
+
+                                morphed_nom = nominal
+                                jmsr_pairs = []
+                                for key_a, key_b in (("JMS", "JMSunconstrained"), ("JMR", "JMRunconstrained")):
+                                    k = next((k for k in (key_a, key_b) if k in jmsr_syst_map), None)
+                                    if k is None:
+                                        continue
+                                    up_vals, dn_vals = _jmsr_tpl(f"{k}Up"), _jmsr_tpl(f"{k}Down")
+                                    if key_a == "JMR" and jmsr_cfg.get("jmr", 1.0) - jmsr_cfg.get("jmr_unc", 0.1) < 1.0:
+                                        dn_vals = np.clip(2 * nominal - up_vals, 0.0, None)
+                                    jmsr_pairs.append((key_a, key_b, (up_vals, None, None), (dn_vals, None, None)))
+
+                            elif proc_name in jmsr_processes:
                                 # Build a MorphHistW2 from the already-loaded nominal template.
                                 sumw, edges, _name, sumw2 = templ
                                 morph = MorphHistW2((sumw, edges, sumw2))
@@ -478,6 +502,7 @@ def rhalphabet(args):
                                     ),
                                 ]
 
+                            if proc_name in jmsr_processes:
                                 for key_a, key_b, (up_vals, _, _), (dn_vals, _, _) in jmsr_pairs:
                                     active_key = next(
                                         (k for k in (key_a, key_b) if k in jmsr_syst_map), None
@@ -494,8 +519,17 @@ def rhalphabet(args):
                                             f"Max relative diff: {np.max(np.abs(morphed_nom - nominal) / np.maximum(nominal, 1e-10)):.4f}"
                                         )
 
+                                    _nuis = jmsr_syst_map[active_key]
+                                    if config.get("jmsr_decorrelate", False):
+                                        _fl = "bb" if proc_name.endswith("bb") else "ccs"
+                                        _base = "CMS_jms" if active_key.startswith("JMS") else "CMS_jmr"
+                                        _nm = f"{_base}_{year}_{_fl}"
+                                        if _nm not in jmsr_nuis_cache:
+                                            _u = "unconstrained" in active_key
+                                            jmsr_nuis_cache[_nm] = rl.NuisanceParameter(_nm, "shapeU", lo=-JMSR_RANGE, hi=JMSR_RANGE) if _u else rl.NuisanceParameter(_nm, "shape")
+                                        _nuis = jmsr_nuis_cache[_nm]
                                     sample.setParamEffect(
-                                        jmsr_syst_map[active_key],
+                                        _nuis,
                                         safe_ratio(
                                             up_vals, morphed_nom
                                         ),  # take the ratio between up and nominal

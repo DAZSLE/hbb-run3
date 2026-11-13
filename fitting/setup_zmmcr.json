@@ -1,5 +1,6 @@
 {
-    "data_obs_name": "Muondata",
+    "stitch_ptg": true,
+    "data_obs_name": "data_obs",
     "observable": {
         "name": "mll",
         "branch_name": "Zmm_MuonPair_mll",
@@ -28,5 +29,5 @@
     "pt_min_scale": 300.0,
     "do_systematics": false,
     "active_systematics": [],
-    "samples_qq": ["Wjets", "Zjets"]
+    "samples_qq": []
 }

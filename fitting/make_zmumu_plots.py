@@ -33,10 +33,12 @@ from pathlib import Path
 import mplhep as hep
 import numpy as np
 import pandas as pd
+import uproot
 
 from hbb import utils
 
 from cr_plotting import make_stack_plot, describe_df_weight
+from template_utils import _PTG_EDGES, _ptg_bin  # AN-23-206 App.H stitch windows
 
 hep.style.use("CMS")
 
@@ -173,6 +175,72 @@ VARS_GAMMA = [
 ]
 
 # ---------------------------------------------------------------------------
+# mumu+gamma reference for the Z(mumu) CR datacard (PR #72)
+#   DYGto2LG = dedicated Z(->ll)+gamma (matrix-element photon), gen-stitched on
+#   LHEGammaPt in the datacard pipeline (template_utils). save_root_histograms
+#   writes the mll template consumed by make_zmmcr_datacard.py.
+# ---------------------------------------------------------------------------
+DY_GROUPS_GAMMA = {
+    "Zmm_Zgamma": {
+        "datasets": [
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-100",
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-200",
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-400",
+            "DYGto2LG-1Jets_Bin-MLL-50-PTG-600",
+        ],
+        "color": "#2471A3",
+        "label": r"Z($\mu\mu$)$\gamma$ (DYG, ME)",
+    },
+}
+
+MLL_FIT_BINS = np.linspace(60, 120, 31)
+
+DATACARD_PROC_MAP = {
+    "Muondata":   "data_obs",
+    "Zmm_Zgamma": "Zjets",
+    "Wjets":      "Wjets",
+    "ttbar":      "ttbar",
+    "VV":         "VV",
+    "singlet":    "singlet",
+}
+
+
+def save_root_histograms(
+    all_events: dict[str, pd.DataFrame],
+    selection_mask: dict[str, pd.Series],
+    year: str,
+    outpath: Path,
+) -> None:
+    """Write mll histograms for make_zmmcr_datacard.py: zmmcr_inclusive_pt1_{proc}_nominal."""
+    merged: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for plotter_proc, dc_proc in DATACARD_PROC_MAP.items():
+        if plotter_proc not in all_events:
+            continue
+        df   = all_events[plotter_proc]
+        mask = selection_mask.get(plotter_proc)
+        if mask is not None:
+            df = df[mask]
+        if df.empty:
+            continue
+        mll_vals = df["Zmm_MuonPair_mll"].values
+        is_data  = "data" in plotter_proc.lower()
+        weights  = np.ones(len(df)) if is_data else df["finalWeight"].astype(float).values
+        sumw, _  = np.histogram(mll_vals, bins=MLL_FIT_BINS, weights=weights)
+        sumw2, _ = np.histogram(mll_vals, bins=MLL_FIT_BINS, weights=weights ** 2)
+        if dc_proc in merged:
+            merged[dc_proc] = (merged[dc_proc][0] + sumw, merged[dc_proc][1] + sumw2)
+        else:
+            merged[dc_proc] = (sumw, sumw2)
+    outpath.parent.mkdir(parents=True, exist_ok=True)
+    with uproot.recreate(outpath) as f:
+        for dc_proc, (sumw, sumw2) in merged.items():
+            key = f"zmmcr_inclusive_pt1_{dc_proc}_nominal"
+            f[key] = (sumw, MLL_FIT_BINS)
+            print(f"  [{dc_proc:12s}]  yield = {sumw.sum():.1f}  -> {key}")
+    print(f"\n  ROOT file written: {outpath}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -219,6 +287,42 @@ def main(args: argparse.Namespace) -> None:
         else:
             print(f"  [skip] {proc}: no parquets found")
 
+    # --- Also load DYGto2LG (Zmm_Zgamma) for the mumu+gamma datacard reference (PR #72) ---
+    # AN-23-206 App.H stitch: load each inclusive-above PTG bin separately and keep only
+    # events whose LHE photon pT falls in that bin's window, so the bins don't multi-count
+    # (mirrors the stitch in template_utils used by the make_datacards zmmcr path).
+    if args.save_root or args.gamma:
+        gamma_data_dir = Path(args.gamma_data_dir) if args.gamma_data_dir else data_dir
+        for proc, info in DY_GROUPS_GAMMA.items():
+            pieces = []
+            for ds in info["datasets"]:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    loaded = utils.load_samples(
+                        data_dir=gamma_data_dir,
+                        samples={proc: [ds]},
+                        columns=COLS + ["LHEGammaPt"],
+                        region=region,
+                    )
+                if not (loaded and proc in loaded and not loaded[proc].empty):
+                    print(f"  [skip] {ds}: no parquets found")
+                    continue
+                df = loaded[proc]
+                ptg = _ptg_bin(ds)
+                if ptg is not None and "LHEGammaPt" in df.columns:
+                    lo, hi = _PTG_EDGES[ptg]
+                    gpt = df["LHEGammaPt"].astype(float)
+                    df = df[(gpt >= lo) & (gpt < hi)]
+                    print(f"  Stitched {ds}: {len(df):,} events in LHE gamma pT [{lo:.0f},{hi:.0f})")
+                else:
+                    print(f"  [warn] {ds}: no LHEGammaPt / not a PTG bin -> UNSTITCHED")
+                pieces.append(df)
+            if pieces:
+                all_events[proc] = pd.concat(pieces, ignore_index=True)
+                print(f"  Loaded {proc} (stitched): {len(all_events[proc]):,} events")
+            else:
+                print(f"  [skip] {proc}: no parquets found")
+
     # --- Load other MC + data via pmap ---
     with open(Path(__file__).parent / "pmap_run3.json") as f:
         pmap = json.load(f)
@@ -261,6 +365,20 @@ def main(args: argparse.Namespace) -> None:
         else:
             no_photon_mask[proc] = pd.Series(True, index=df.index)
             gamma_mask[proc] = pd.Series(False, index=df.index)
+
+    # --- Save ROOT histograms for the Z(mumu) CR datacard (PR #72) ---
+    if args.save_root:
+        root_outdir = Path(args.outdir_root) if args.outdir_root else outdir / "root"
+        if args.gamma:
+            root_mask = gamma_mask
+            root_path = root_outdir / f"fitting_{year}_zmmcr_gamma_mll.root"
+            sel_label = "mumu+gamma (>=1 tight photon, Photon0_pt>120)"
+        else:
+            root_mask = no_photon_mask
+            root_path = root_outdir / f"fitting_{year}_zmmcr_mll.root"
+            sel_label = "no-photon (plain DY)"
+        print(f"\n--- Saving ROOT histograms ({year}) [{sel_label}] ---")
+        save_root_histograms(all_events, root_mask, year, root_path)
 
     if args.debug:
         print("-------------------------------------")
@@ -324,6 +442,25 @@ if __name__ == "__main__":
         help="Full path to the directory containing the parquets for this year, "
              "e.g. /eos/uscms/store/group/lpchbbrun3/lara/MyTag/2024 "
              "Overrides --tag and --personal-path.",
+    )
+    parser.add_argument(
+        "--gamma-data-dir",
+        default=None,
+        help="Parquet directory for the DYGto2LG (mumu+gamma) samples, e.g. the LHE-photon "
+             "reskim .../gmachado/26Sep17_lhephoton_v15/2024. Defaults to the main data dir.",
+    )
+    parser.add_argument(
+        "--save-root", action="store_true",
+        help="Write the Z(mumu) CR mll ROOT template for make_zmmcr_datacard.py.",
+    )
+    parser.add_argument(
+        "--gamma", action="store_true",
+        help="Use the mumu+gamma selection (DYGto2LG reference) for --save-root "
+             "instead of the no-photon plain-DY selection.",
+    )
+    parser.add_argument(
+        "--outdir-root", default=None,
+        help="Directory for the --save-root output (default: <outdir>/root).",
     )
     args = parser.parse_args()
     main(args)
