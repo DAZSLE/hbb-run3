@@ -1,0 +1,12 @@
+{
+  "2024": {
+    "VGammaHad": {
+      "subsamples": ["ZGto2QG-1Jets_Bin-PTG-100","ZGto2QG-1Jets_Bin-PTG-200","ZGto2QG-1Jets_Bin-PTG-400","ZGto2QG-1Jets_Bin-PTG-600","WGto2QG-1Jets_Bin-PTG-100","WGto2QG-1Jets_Bin-PTG-200","WGto2QG-1Jets_Bin-PTG-400","WGto2QG-1Jets_Bin-PTG-600"],
+      "files_per_job": 15
+    },
+    "VGammaLep": {
+      "subsamples": ["DYGto2LG-1Jets_Bin-MLL-50-PTG-100","DYGto2LG-1Jets_Bin-MLL-50-PTG-200","DYGto2LG-1Jets_Bin-MLL-50-PTG-400","DYGto2LG-1Jets_Bin-MLL-50-PTG-600","WGtoLNuG-1Jets_Bin-PTG-100","WGtoLNuG-1Jets_Bin-PTG-200","WGtoLNuG-1Jets_Bin-PTG-400","WGtoLNuG-1Jets_Bin-PTG-600"],
+      "files_per_job": 15
+    }
+  }
+}

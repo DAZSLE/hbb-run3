@@ -39,6 +39,7 @@ from .GenSelection import (
     gen_selection_Hbb,
     gen_selection_V,
     gen_selection_Vg,
+    gen_selection_Vg_leptonic,
     getBosons,
 )
 from .objects import (
@@ -69,7 +70,12 @@ gen_selection_dict = {
     "Hto2B": gen_selection_Hbb,
     "Wto2Q-": gen_selection_V,
     "Zto2Q-": gen_selection_V,
+    # hadronic V+gamma: V->qq reco + gen & LHE photon (LHEGammaPt = stitching variable)
     "ZGto2QG-": gen_selection_Vg,
+    "WGto2QG-": gen_selection_Vg,
+    # leptonic V+gamma: photon only (gen & LHE); no hadronic V->qq reco
+    "DYGto2LG-": gen_selection_Vg_leptonic,
+    "WGtoLNuG-": gen_selection_Vg_leptonic,
 }
 
 
