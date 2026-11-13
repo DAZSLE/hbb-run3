@@ -2,6 +2,9 @@ from __future__ import annotations
 
 
 def get_datasets():  ## PRIVATE production with GloParTv2
+    # Some data datasets have two crab tasks of the same PFNano: the original (25061x_) and a
+    # Feb 2026 re-run (260208_), with ~99.6-100% the same lumi sections. Listing only the dataset
+    # folder picks up both and double counts events, so those entries are pinned to the 260208_ task.
     return {
         "2022": {
             "JetMET": {
@@ -168,7 +171,7 @@ def get_datasets():  ## PRIVATE production with GloParTv2
         },
         "2022EE": {
             "JetMET": {
-                "JetMET_Run2022E": "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2022EE/JetMET/Run2022E-22Sep2023-v1_DAZSLE_PFNano",
+                "JetMET_Run2022E": "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2022EE/JetMET/Run2022E-22Sep2023-v1_DAZSLE_PFNano/260208_031014",
                 "JetMET_Run2022F": "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2022EE/JetMET/Run2022F-22Sep2023-v2_DAZSLE_PFNano",
                 "JetMET_Run2022G": "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2022EE/JetMET/Run2022G-22Sep2023-v2_DAZSLE_PFNano",
             },
@@ -360,12 +363,12 @@ def get_datasets():  ## PRIVATE production with GloParTv2
                     "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023/Muon1/Run2023C-22Sep2023_v2-v1_DAZSLE_PFNano",
                 ],
                 "Muon_Run2023Cv3": [
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023/Muon0/Run2023C-22Sep2023_v3-v1_DAZSLE_PFNano",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023/Muon0/Run2023C-22Sep2023_v3-v1_DAZSLE_PFNano/260208_033331",
                     "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023/Muon1/Run2023C-22Sep2023_v3-v1_DAZSLE_PFNano",
                 ],
                 "Muon_Run2023Cv4": [
                     "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023/Muon0/Run2023C-22Sep2023_v4-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023/Muon1/Run2023C-22Sep2023_v4-v2_DAZSLE_PFNano",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023/Muon1/Run2023C-22Sep2023_v4-v2_DAZSLE_PFNano/260208_033411",
                 ],
             },
             "EGamma": {
@@ -538,26 +541,26 @@ def get_datasets():  ## PRIVATE production with GloParTv2
         "2023BPix": {
             "JetMET": {
                 "JetMET_Run2023D": [
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET0/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET0/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET1/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET1/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET0/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano/260208_031159",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET0/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano/260208_031242",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET1/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano/260208_031322",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/JetMET1/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano/260208_031403",
                 ],
             },
             "Muon": {
                 "Muon_Run2023D": [
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon0/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon0/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon1/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon1/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon0/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano/260208_032627",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon0/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano/260208_032709",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon1/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano/260208_032749",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/Muon1/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano/260208_032832",
                 ],
             },
             "EGamma": {
                 "EGamma_Run2023D": [
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma0/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma0/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma1/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano",
-                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma1/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma0/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano/260208_030154",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma0/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano/260208_030238",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma1/Run2023D-22Sep2023_v1-v1_DAZSLE_PFNano/260208_030318",
+                    "/store/group/lpcpfnano/PFNano_Run3/25v2/sixie/data_2023BPix/EGamma1/Run2023D-22Sep2023_v2-v1_DAZSLE_PFNano/260208_030359",
                 ]
             },
             "TTGamma": {
